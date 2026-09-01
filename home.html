@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lorimer / Metropolitan Av</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #111;
+      --surface: #1b1b1b;
+      --border:  #2c2c2c;
+      --l:       #a7a9ac;
+      --g:       #6cbe45;
+      --red:     #e03131;
+      --yellow:  #f5a623;
+      --white:   #f0f0f0;
+      --muted:   #5a5a5a;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--white);
+      font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────── */
+    header {
+      padding: 20px 24px 15px;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: clamp(1rem, 3.5vw, 1.5rem);
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--white);
+    }
+
+    #clock {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-top: 5px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Board grid ──────────────────────────── */
+    .board {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: 1;
+    }
+
+    @media (max-width: 480px) {
+      .board { grid-template-columns: 1fr; }
+    }
+
+    .line {
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    .line:last-child { border-right: none; }
+
+    /* ── Line header ─────────────────────────── */
+    .line-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .badge {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: #000;
+      flex-shrink: 0;
+    }
+    .badge.L { background: var(--l); }
+    .badge.G { background: var(--g); }
+
+    .station-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Direction sections ──────────────────── */
+    .dir-section {
+      padding: 14px 18px 16px;
+      border-bottom: 1px solid var(--border);
+      flex: 1;
+    }
+    .dir-section:last-child { border-bottom: none; }
+
+    .dir-label {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .trains {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      min-height: 30px;
+      align-items: center;
+    }
+
+    /* ── Arrival pills ───────────────────────── */
+    .pill {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 2px;
+      padding: 5px 13px;
+      border-radius: 99px;
+      border: 1.5px solid;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.92rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .pill.now {
+      background: rgba(224, 49, 49, 0.14);
+      border-color: var(--red);
+      color: var(--red);
+    }
+    .pill.soon {
+      background: rgba(245, 166, 35, 0.14);
+      border-color: var(--yellow);
+      color: var(--yellow);
+    }
+    .pill.coming {
+      background: rgba(240, 240, 240, 0.05);
+      border-color: #3a3a3a;
+      color: var(--white);
+    }
+
+    .pill-unit {
+      font-size: 0.62rem;
+      font-weight: 400;
+      opacity: 0.6;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-style: italic;
+    }
+
+    /* ── Footer ──────────────────────────────── */
+    footer {
+      padding: 9px 24px;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      letter-spacing: 0.02em;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-right: 6px;
+      background: var(--muted);
+      vertical-align: middle;
+      transition: background 0.4s;
+    }
+    .dot.ok  { background: var(--g); }
+    .dot.err { background: var(--red); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Lorimer St &nbsp;/&nbsp; Metropolitan Av</h1>
+  <div id="clock"></div>
+</header>
+
+<div class="board">
+
+  <div class="line">
+    <div class="line-header">
+      <div class="badge L">L</div>
+      <div class="station-name">Lorimer St</div>
+    </div>
+    <div id="L-N" class="dir-section">
+      <div class="dir-label">↑ toward 8 Av / Manhattan</div>
+      <div class="trains"><span class="empty">Loading…</span></div>
+    </div>
+    <div id="L-S" class="dir-section">
+      <div class="dir-label">↓ toward Canarsie</div>
+      <div class="trains"><span class="empty">Loading…</span></div>
+    </div>
+  </div>
+
+  <div class="line">
+    <div class="line-header">
+      <div class="badge G">G</div>
+      <div class="station-name">Metropolitan Av</div>
+    </div>
+    <div id="G-N" class="dir-section">
+      <div class="dir-label">↑ toward Court Sq–23 St</div>
+      <div class="trains"><span class="empty">Loading…</span></div>
+    </div>
+    <div id="G-S" class="dir-section">
+      <div class="dir-label">↓ toward Church Av</div>
+      <div class="trains"><span class="empty">Loading…</span></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <span class="dot" id="dot"></span>
+  <span id="status">Connecting to MTA…</span>
+</footer>
+
+<script>
+  // ── Clock ──────────────────────────────────────────
+  function tick() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) +
+      ' · ' +
+      now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  // ── Rendering ──────────────────────────────────────
+  function pillClass(min) {
+    if (min <= 0) return 'now';
+    if (min <= 3) return 'soon';
+    return 'coming';
+  }
+
+  function renderPill(t) {
+    const cls = pillClass(t.minutesAway);
+    const inner = t.minutesAway <= 0
+      ? 'Now'
+      : `${t.minutesAway}<span class="pill-unit"> min</span>`;
+    return `<span class="pill ${cls}">${inner}</span>`;
+  }
+
+  function renderSection(id, trains) {
+    const section = document.getElementById(id);
+    if (!section) return;
+    const container = section.querySelector('.trains');
+    container.innerHTML = trains.length === 0
+      ? '<span class="empty">No trains scheduled</span>'
+      : trains.slice(0, 5).map(renderPill).join('');
+  }
+
+  // ── Data fetch ─────────────────────────────────────
+  async function fetchAndRender() {
+    const dot = document.getElementById('dot');
+    const status = document.getElementById('status');
+    try {
+      const res = await fetch('/api/trains');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const by = (arr, dir) => arr.filter(t => t.direction === dir);
+      renderSection('L-N', by(data.L, 'N'));
+      renderSection('L-S', by(data.L, 'S'));
+      renderSection('G-N', by(data.G, 'N'));
+      renderSection('G-S', by(data.G, 'S'));
+
+      dot.className = 'dot ok';
+      status.textContent = 'Updated ' + new Date(data.updatedAt).toLocaleTimeString();
+    } catch (err) {
+      dot.className = 'dot err';
+      status.textContent = 'Error: ' + err.message;
+    }
+  }
+
+  fetchAndRender();
+  setInterval(fetchAndRender, 15_000);
+</script>
+</body>
+</html>
