@@ -856,8 +856,19 @@
   function fitToSubject() {
     const subject = map.trail ?? map.circle;
     if (!map.instance || !subject) return;
+
+    // A container with no size (the page loaded in a background tab) makes
+    // fitBounds pick the maximum zoom. Wait for a real measurement instead.
+    const el = document.getElementById('map');
+    if (!el.clientWidth || !el.clientHeight) {
+      clearTimeout(fitTimer);
+      fitTimer = setTimeout(fitToSubject, 500);
+      return;
+    }
+
     map.instance.invalidateSize();
     map.instance.fitBounds(subject.getBounds(), { padding: [12, 12] });
+    map.fitted = true;
   }
 
   // Fitting depends on the container's measured size, so drive it off the
@@ -869,6 +880,12 @@
     clearTimeout(fitTimer);
     fitTimer = setTimeout(fitToSubject, 80);
   }
+
+  // Coming back to a backgrounded tab is the other way the container goes from
+  // unmeasurable to real, and it does not always surface as a resize.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') scheduleFit();
+  });
 
   function highlight(stationId, on) {
     map.pins.get(stationId)?.getElement()?.classList.toggle('active', on);
@@ -948,6 +965,11 @@
     const view = `${lat},${lon},${data.radiusMiles}`;
     if (map.view !== view) {
       map.view = view;
+      map.fitted = false;
+      scheduleFit();
+    } else if (!map.fitted) {
+      // A fit that never landed (container still unmeasurable) gets another go
+      // on every refresh, so the view always converges.
       scheduleFit();
     }
   }
