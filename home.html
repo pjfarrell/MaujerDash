@@ -46,13 +46,22 @@
       text-transform: uppercase;
     }
 
-    #clock {
+    .meta {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      margin-top: 5px;
       color: var(--muted);
       font-size: 0.82rem;
-      margin-top: 5px;
       font-variant-numeric: tabular-nums;
       letter-spacing: 0.02em;
     }
+
+    .weather { color: var(--dim); }
+    .weather::before { content: '·'; margin-right: 10px; color: var(--muted); }
+    .focus-now .weather::before { margin-right: 8px; }
 
     .controls {
       display: flex;
@@ -133,10 +142,14 @@
       background: rgba(17, 17, 17, 0.9);
       border: 1px solid var(--border);
       transition: transform 0.15s, border-color 0.15s;
+      /* Leaflet anchors the icon's top-left at the coordinate, so centre the
+         badge on it here — otherwise every pin sits down-right of its station,
+         which at a small radius reads as being outside the circle. */
+      transform: translate(-50%, -50%);
     }
     .station-pin .badge { width: 19px; height: 19px; font-size: 0.62rem; }
     .station-pin.active .pin-inner {
-      transform: scale(1.25);
+      transform: translate(-50%, -50%) scale(1.25);
       border-color: var(--white);
     }
 
@@ -589,7 +602,10 @@
 
 <header>
   <h1>Nearby Trains</h1>
-  <div id="clock"></div>
+  <div class="meta">
+    <span id="clock"></span>
+    <span id="weather" class="weather" hidden></span>
+  </div>
   <div class="controls">
     <span class="place-bar">
       <span class="place-prefix" id="place-prefix" hidden>Showing stations near</span>
@@ -631,7 +647,10 @@
 </footer>
 
 <div id="focus" hidden>
-  <div class="focus-now" id="focus-now"></div>
+  <div class="focus-now">
+    <span id="focus-now"></span>
+    <span id="focus-weather" class="weather" hidden></span>
+  </div>
   <div class="focus-label" id="focus-label">Leave in</div>
   <div class="focus-timer" id="focus-timer">--:--</div>
   <div class="focus-line" id="focus-line"></div>
@@ -675,6 +694,7 @@
     byId: new Map(),   // station id -> latest station payload
     selected: null,    // station whose route trail is drawn
     session: null,     // train being counted down to
+    weather: null,     // current conditions at the chosen place
   };
 
   const $ = id => document.getElementById(id);
@@ -700,6 +720,7 @@
     clearRoute();
     renderPlace();
     refresh();
+    loadWeather();
   }
 
   // Clock
@@ -887,6 +908,37 @@
   function esc(text) {
     return String(text).replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // Weather — refreshed on its own slow clock, and whenever the place moves.
+  const WEATHER_REFRESH_MS = 10 * 60_000;
+
+  function renderWeather() {
+    const weather = state.weather;
+    const text = weather ? `${weather.icon} ${weather.temperature}° ${weather.description}` : '';
+    const detail = weather
+      ? `Feels like ${weather.feelsLike}° · wind ${weather.windMph} mph` +
+        (weather.precipitation ? ` · ${weather.precipitation}" precipitation` : '')
+      : '';
+
+    for (const id of ['weather', 'focus-weather']) {
+      const el = $(id);
+      el.textContent = text;
+      el.title = detail;
+      el.hidden = !weather;
+    }
+  }
+
+  async function loadWeather() {
+    const place = state.place ?? DEFAULT_PLACE;
+    try {
+      const res = await fetch(`/api/weather?lat=${place.lat}&lon=${place.lon}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      state.weather = await res.json();
+    } catch {
+      state.weather = null;   // the board matters more than the forecast
+    }
+    renderWeather();
   }
 
   // Map
@@ -1472,6 +1524,8 @@
     renderPlace();
     refresh();
     setInterval(refresh, REFRESH_MS);
+    loadWeather();
+    setInterval(loadWeather, WEATHER_REFRESH_MS);
   })();
 </script>
 </body>

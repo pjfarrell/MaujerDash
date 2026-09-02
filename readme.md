@@ -21,6 +21,8 @@ Travel times come from the public [OSRM](https://project-osrm.org/) demo server,
 
 If OSRM is unreachable the app falls back to straight-line distance padded by 30% for the street grid, and flags it as `estimated` in the API and in the row's tooltip.
 
+Current conditions for the chosen location sit next to the clock in the header and at the top of a focus session, from [Open-Meteo](https://open-meteo.com/) (no API key), cached for 10 minutes. `GET /api/weather?lat=&lon=` returns them. If it fails the app just hides the weather.
+
 ## Setting the location
 
 The location is picked once and then stays put; only the arrival times refresh. Use **Change** to set it, either way:

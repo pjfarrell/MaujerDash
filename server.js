@@ -333,6 +333,70 @@ app.get('/api/route', async (req, res) => {
   }
 });
 
+// --- Weather --------------------------------------------------
+// Open-Meteo needs no API key. Conditions come back as WMO codes.
+const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast';
+const WEATHER_TTL = 10 * 60_000;
+const weatherCache = new Map();
+
+const WMO = {
+  0: ['Clear', '☀️', '🌙'], 1: ['Mainly clear', '🌤️', '🌙'], 2: ['Partly cloudy', '⛅', '☁️'],
+  3: ['Overcast', '☁️', '☁️'], 45: ['Fog', '🌫️', '🌫️'], 48: ['Freezing fog', '🌫️', '🌫️'],
+  51: ['Light drizzle', '🌦️', '🌦️'], 53: ['Drizzle', '🌦️', '🌦️'], 55: ['Heavy drizzle', '🌧️', '🌧️'],
+  56: ['Freezing drizzle', '🌧️', '🌧️'], 57: ['Freezing drizzle', '🌧️', '🌧️'],
+  61: ['Light rain', '🌦️', '🌦️'], 63: ['Rain', '🌧️', '🌧️'], 65: ['Heavy rain', '🌧️', '🌧️'],
+  66: ['Freezing rain', '🌧️', '🌧️'], 67: ['Freezing rain', '🌧️', '🌧️'],
+  71: ['Light snow', '🌨️', '🌨️'], 73: ['Snow', '🌨️', '🌨️'], 75: ['Heavy snow', '❄️', '❄️'],
+  77: ['Snow grains', '🌨️', '🌨️'],
+  80: ['Light showers', '🌦️', '🌦️'], 81: ['Showers', '🌧️', '🌧️'], 82: ['Heavy showers', '⛈️', '⛈️'],
+  85: ['Snow showers', '🌨️', '🌨️'], 86: ['Snow showers', '🌨️', '🌨️'],
+  95: ['Thunderstorm', '⛈️', '⛈️'], 96: ['Thunderstorm', '⛈️', '⛈️'], 99: ['Thunderstorm', '⛈️', '⛈️'],
+};
+
+app.get('/api/weather', async (req, res) => {
+  const origin = readOrigin(req.query);
+  const key = `${origin.lat.toFixed(2)},${origin.lon.toFixed(2)}`;
+  const cached = weatherCache.get(key);
+  if (cached && Date.now() - cached.at < WEATHER_TTL) return res.json(cached.value);
+
+  const params = new URLSearchParams({
+    latitude: origin.lat,
+    longitude: origin.lon,
+    current: 'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,is_day',
+    temperature_unit: 'fahrenheit',
+    wind_speed_unit: 'mph',
+    precipitation_unit: 'inch',
+    timezone: 'auto',
+  });
+
+  try {
+    const response = await fetch(`${WEATHER_URL}?${params}`, {
+      signal: AbortSignal.timeout(OSRM_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`Weather ${response.status}: ${response.statusText}`);
+
+    const now = (await response.json()).current;
+    const isDay = now.is_day === 1;
+    const [description, dayIcon, nightIcon] = WMO[now.weather_code] ?? ['Unknown', '🌡️', '🌡️'];
+
+    const value = {
+      temperature: Math.round(now.temperature_2m),
+      feelsLike: Math.round(now.apparent_temperature),
+      precipitation: now.precipitation,
+      windMph: Math.round(now.wind_speed_10m),
+      description,
+      icon: isDay ? dayIcon : nightIcon,
+      isDay,
+      observedAt: now.time,
+    };
+    weatherCache.set(key, { at: Date.now(), value });
+    if (weatherCache.size > 50) weatherCache.delete(weatherCache.keys().next().value);
+    res.json(value);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // --- Geocoding ------------------------------------------------
 // Turns whatever someone types into candidate coordinates. Coordinates and
 // station names are answered from memory; anything else goes to Nominatim,
