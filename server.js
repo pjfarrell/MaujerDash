@@ -26,7 +26,21 @@ const MAX_RADIUS_MI = 5;
 const DEFAULT_LIMIT = 6;
 const MAX_LIMIT = 20;
 const ARRIVALS_PER_DIRECTION = 6;
+
+// Travel times. OSRM's public demo only runs the car profile — it returns the
+// same numbers whatever profile you ask for — so we take the street distance
+// from it and derive walking and cycling times ourselves, and use its duration
+// only for driving. If it is unreachable we fall back to straight-line distance
+// padded for the street grid, and say so via `estimated`.
+const OSRM_BASE = 'https://router.project-osrm.org';
+const OSRM_TIMEOUT_MS = 8000;
+const METERS_PER_MILE = 1609.34;
+const STREET_DETOUR = 1.3;
 const WALKING_MPH = 3;
+const CYCLING_MPH = 10;
+const CITY_DRIVING_MPH = 12;
+const TRAVEL_TTL = 60 * 60_000;   // road geometry barely changes; durations are free-flow
+const TRAVEL_CACHE_MAX = 100;
 
 // --- Feed fetching -------------------------------------------
 // One cache entry per feed. Concurrent callers share the in-flight request, and
@@ -95,6 +109,56 @@ function stationsNear(origin, radius, limit) {
   const inRange = ranked.filter(s => s.distance <= radius).slice(0, limit);
   if (inRange.length) return { nearby: inRange, expanded: false };
   return { nearby: ranked.slice(0, Math.min(3, limit)), expanded: true };
+}
+
+// --- Travel times --------------------------------------------
+const travelCache = new Map();
+
+function cacheTravel(key, value) {
+  if (travelCache.size >= TRAVEL_CACHE_MAX) travelCache.delete(travelCache.keys().next().value);
+  travelCache.set(key, { at: Date.now(), value });
+  return value;
+}
+
+async function osrmFetch(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(OSRM_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`OSRM ${res.status}: ${res.statusText}`);
+  const body = await res.json();
+  if (body.code !== 'Ok') throw new Error(`OSRM ${body.code}`);
+  return body;
+}
+
+// One request covers every nearby station, so this costs a single call per
+// location — not one per station, and not one per 15s refresh.
+async function roadDistances(origin, stations) {
+  const key = `table:${origin.lat.toFixed(5)},${origin.lon.toFixed(5)}|${stations.map(s => s.id).join(',')}`;
+  const cached = travelCache.get(key);
+  if (cached && Date.now() - cached.at < TRAVEL_TTL) return cached.value;
+
+  const points = [origin, ...stations].map(p => `${p.lon},${p.lat}`).join(';');
+  const body = await osrmFetch(
+    `${OSRM_BASE}/table/v1/driving/${points}?sources=0&annotations=duration,distance`);
+
+  const durations = body.durations?.[0] ?? [];
+  const distances = body.distances?.[0] ?? [];
+  return cacheTravel(key, stations.map((_, i) => ({
+    meters: distances[i + 1],
+    seconds: durations[i + 1],
+  })));
+}
+
+function travelTimes(straightLineMiles, road) {
+  const routed = Number.isFinite(road?.meters) && Number.isFinite(road?.seconds);
+  const miles = routed ? road.meters / METERS_PER_MILE : straightLineMiles * STREET_DETOUR;
+  const at = mph => Math.max(1, Math.round((miles / mph) * 60));
+
+  return {
+    streetMiles: Number(miles.toFixed(3)),
+    estimated: !routed,
+    walk: at(WALKING_MPH),
+    bike: at(CYCLING_MPH),
+    drive: routed ? Math.max(1, Math.round(road.seconds / 60)) : at(CITY_DRIVING_MPH),
+  };
 }
 
 // --- Arrivals ------------------------------------------------
@@ -195,13 +259,23 @@ async function nearby(req, res) {
   const now = Math.floor(Date.now() / 1000);
   const arrivals = collectArrivals(feeds, found.map(s => s.station.id), now);
 
+  // Routing is a nicety — if it is down, travelTimes falls back to estimates.
+  let roads = null;
+  let routingError = null;
+  try {
+    roads = await roadDistances(origin, found.map(s => s.station));
+  } catch (err) {
+    routingError = err.message;
+  }
+
   res.json({
     origin,
     radiusMiles: radius,
     expandedSearch: expanded,
     updatedAt: Date.now(),
     feedErrors: errors,
-    stations: found.map(({ station, distance }) => ({
+    routingError,
+    stations: found.map(({ station, distance }, index) => ({
       id: station.id,
       name: station.name,
       borough: station.borough,
@@ -209,7 +283,7 @@ async function nearby(req, res) {
       lat: station.lat,
       lon: station.lon,
       distanceMiles: Number(distance.toFixed(3)),
-      walkMinutes: Math.max(1, Math.round((distance / WALKING_MPH) * 60)),
+      travel: travelTimes(distance, roads?.[index]),
       directions: [
         { code: 'N', label: station.north, trains: arrivals.get(station.id).N },
         { code: 'S', label: station.south, trains: arrivals.get(station.id).S },
@@ -225,6 +299,39 @@ app.use((_, res, next) => {
 
 app.get('/api/nearby', nearby);
 app.get('/api/trains', nearby); // legacy path, same payload
+
+// The street path from the origin to one station, for drawing on the map.
+// The geometry is a car route (see the OSRM note above), so a walking line may
+// differ where one-way streets are involved.
+app.get('/api/route', async (req, res) => {
+  const from = readOrigin(req.query);
+  const toLat = Number(req.query.toLat);
+  const toLon = Number(req.query.toLon);
+  if (!Number.isFinite(toLat) || !Number.isFinite(toLon) ||
+      Math.abs(toLat) > 90 || Math.abs(toLon) > 180) {
+    return res.status(400).json({ error: 'Missing or invalid toLat/toLon' });
+  }
+
+  const key = `route:${from.lat.toFixed(5)},${from.lon.toFixed(5)}|${toLat.toFixed(5)},${toLon.toFixed(5)}`;
+  const cached = travelCache.get(key);
+  if (cached && Date.now() - cached.at < TRAVEL_TTL) return res.json(cached.value);
+
+  try {
+    const body = await osrmFetch(
+      `${OSRM_BASE}/route/v1/driving/${from.lon},${from.lat};${toLon},${toLat}` +
+      `?overview=full&geometries=geojson`);
+
+    const route = body.routes[0];
+    if (!route) throw new Error('No route found');
+
+    res.json(cacheTravel(key, {
+      travel: travelTimes(0, { meters: route.distance, seconds: route.duration }),
+      geometry: route.geometry,
+    }));
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
 
 // --- Geocoding ------------------------------------------------
 // Turns whatever someone types into candidate coordinates. Coordinates and

@@ -222,6 +222,36 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .travel {
+      display: flex;
+      gap: 8px;
+      margin-top: 5px;
+      font-size: 0.66rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .travel .mode b { color: var(--dim); font-weight: 700; }
+    .travel .mode.best { color: var(--white); }
+    .travel .mode.best b { color: var(--white); }
+
+    .station.selected { background: #1a1f26; }
+    .station.selected .station-head { box-shadow: inset 3px 0 0 #3b82f6; }
+
+    #route-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 9px 18px;
+      font-size: 0.74rem;
+      color: var(--white);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    #route-banner .muted { color: var(--muted); }
+    #route-banner.warn { color: var(--yellow); }
+
     .rank {
       margin-left: auto;
       font-size: 0.62rem;
@@ -261,39 +291,131 @@
       align-items: center;
     }
 
-    /* Arrival pills */
-    .pill {
-      display: inline-flex;
+    /* Arrival circles: each train is a vessel of liquid that drains from green
+       to red as it approaches. --fill and --liquid are set per train in JS. */
+    .train {
+      position: relative;
+      width: 46px;
+      height: 46px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 1.5px solid #333;
+      background: rgba(240, 240, 240, 0.04);
+      display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 5px;
-      padding: 3px 11px 3px 3px;
-      border-radius: 99px;
-      border: 1.5px solid;
-      font-variant-numeric: tabular-nums;
-      font-size: 0.88rem;
-      font-weight: 700;
+      justify-content: center;
       line-height: 1;
+      cursor: pointer;
     }
 
-    .pill.now    { background: rgba(224, 49, 49, 0.14);  border-color: var(--red);    color: var(--red); }
-    .pill.soon   { background: rgba(245, 166, 35, 0.14); border-color: var(--yellow); color: var(--yellow); }
-    .pill.coming { background: rgba(240, 240, 240, 0.05); border-color: #3a3a3a;      color: var(--white); }
+    .train .liquid {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: var(--fill, 0%);
+      background: var(--liquid, var(--green));
+      transition: height 0.9s ease, background-color 0.9s ease;
+    }
+    /* A lighter band at the top reads as the surface of the liquid */
+    .train .liquid::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.45);
+    }
 
-    .pill .badge { width: 21px; height: 21px; font-size: 0.68rem; }
-    /* A rotated square is as wide as its diagonal, so shrink it to fit the pill */
-    .pill .badge.express { width: 15px; height: 15px; font-size: 0.6rem; }
+    .train-time, .train-route {
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+    }
+    .train-time {
+      font-size: 0.95rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--white);
+    }
+    .train-time.now { font-size: 0.72rem; letter-spacing: 0.02em; }
 
-    .pill-unit {
-      font-size: 0.6rem;
-      font-weight: 400;
-      opacity: 0.6;
-      margin-left: -2px;
+    .train-route {
+      margin-top: 3px;
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: rgba(255, 255, 255, 0.85);
+    }
+    .train-route.express::after { content: ' ◆'; font-size: 0.5rem; }
+
+    /* A train you can no longer reach in time stays visible but steps back */
+    .train.missed {
+      opacity: 0.32;
+      cursor: default;
+      filter: grayscale(0.6);
     }
 
     .empty {
       color: var(--muted);
       font-size: 0.76rem;
       font-style: italic;
+    }
+
+    /* Focus session: the countdown takes the screen */
+    #focus {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .focus-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .focus-timer {
+      font-size: clamp(3.5rem, 17vw, 11rem);
+      font-weight: 800;
+      line-height: 0.95;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      color: var(--green);
+      transition: color 0.6s;
+    }
+    .focus-timer.soon { color: var(--yellow); }
+    .focus-timer.go   { color: var(--red); animation: pulse 1.4s ease-in-out infinite; }
+    .focus-timer.gone { color: var(--muted); font-size: clamp(2rem, 8vw, 4rem); }
+
+    @keyframes pulse { 50% { opacity: 0.45; } }
+
+    .focus-train {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .focus-sub { font-size: 0.86rem; color: var(--dim); }
+    .focus-math { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.03em; }
+
+    #focus-exit { margin-top: 18px; padding: 8px 22px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .focus-timer.go { animation: none; }
     }
 
     /* Footer */
@@ -442,6 +564,7 @@
 </header>
 
 <div id="map"></div>
+<div id="route-banner" hidden></div>
 
 <main id="stations"></main>
 
@@ -449,6 +572,15 @@
   <span class="dot" id="dot"></span>
   <span id="status">Connecting to MTA&hellip;</span>
 </footer>
+
+<div id="focus" hidden>
+  <div class="focus-label" id="focus-label">Leave in</div>
+  <div class="focus-timer" id="focus-timer">--:--</div>
+  <div class="focus-train" id="focus-train"></div>
+  <div class="focus-sub" id="focus-sub"></div>
+  <div class="focus-math" id="focus-math"></div>
+  <button id="focus-exit">End session</button>
+</div>
 
 <script>
   // Official line colors, so a station's badges read the way the signage does.
@@ -479,6 +611,9 @@
     place: loadPlace(),
     locating: false,
     note: null,
+    byId: new Map(),   // station id -> latest station payload
+    selected: null,    // station whose route trail is drawn
+    session: null,     // train being counted down to
   };
 
   const $ = id => document.getElementById(id);
@@ -501,6 +636,7 @@
       state.note = 'This location could not be saved for next time';
     }
     closePicker();
+    clearRoute();
     renderPlace();
     refresh();
   }
@@ -594,35 +730,72 @@
            `<span>${esc(route)}</span></span>`;
   }
 
+  const MODES = ['walk', 'bike', 'drive'];
+  const MODE_PHRASE = { walk: 'on foot', bike: 'by bike', drive: 'by car' };
+
+  // Strict < means a tie goes to the earlier, simpler mode: walking beats
+  // cycling beats driving when the rounded minutes are equal.
+  function fastestMode(travel) {
+    return MODES.reduce((best, mode) => (travel[mode] < travel[best] ? mode : best), 'walk');
+  }
+
   function stationMeta(station) {
-    // Pinning a station puts you on top of it; "0 ft · 1 min walk" reads badly.
+    // Pinning a station puts you on top of it; "0 ft" alone reads better there.
     if (station.distanceMiles * 5280 < 50) return 'Right here';
-    return `${formatDistance(station.distanceMiles)} · ${station.walkMinutes} min walk`;
+    return formatDistance(station.distanceMiles);
   }
 
-  function pillClass(minutes) {
-    if (minutes <= 0) return 'now';
-    if (minutes <= 3) return 'soon';
-    return 'coming';
+  function renderTravel(station) {
+    const travel = station.travel;
+    if (!travel) return '';
+    const best = fastestMode(travel);
+    const note = travel.estimated ? ' (estimated, routing unavailable)' : ' by street route';
+    return `<div class="travel" title="${esc(travel.streetMiles + ' mi' + note)}">` +
+      MODES.map(mode =>
+        `<span class="mode${mode === best ? ' best' : ''}"><b>${travel[mode]}</b> ${mode}</span>`
+      ).join('') + '</div>';
   }
 
-  function renderPill(train) {
-    const time = train.minutesAway <= 0
-      ? 'Now'
-      : `${train.minutesAway}<span class="pill-unit">min</span>`;
+  // A train 20 minutes out shows a full circle; it drains and reddens from there.
+  const FULL_MINUTES = 20;
+
+  function liquid(minutes) {
+    const remaining = Math.max(0, Math.min(1, minutes / FULL_MINUTES));
+    return {
+      fill: `${Math.max(7, remaining * 100).toFixed(0)}%`,   // keep a sliver visible at zero
+      color: `hsl(${(120 * remaining).toFixed(0)} 72% 42%)`, // 120 green -> 0 red
+    };
+  }
+
+  function renderTrain(train, index, station, dirCode) {
+    const { fill, color } = liquid(train.minutesAway);
+    const arriving = train.minutesAway <= 0;
+    const time = arriving ? 'Now' : train.minutesAway;
     const name = train.express ? `${train.route} express` : train.route;
-    const title = train.destination ? `${name} to ${train.destination}` : name;
-    return `<span class="pill ${pillClass(train.minutesAway)}" title="${esc(title)}">` +
-           `${badge(train.route, train.express)}${time}</span>`;
+    const catchable = isCatchable(train, station);
+
+    const where = train.destination ? `${name} to ${train.destination}` : name;
+    const when = arriving ? 'arriving' : `in ${train.minutesAway} min`;
+    const title = catchable
+      ? `${where} ${when} — click to start a focus session`
+      : `${where} ${when} — too soon to make it from here`;
+
+    return `<span class="train${catchable ? '' : ' missed'}"
+                  style="--fill:${fill};--liquid:${color}" title="${esc(title)}"
+                  data-station="${esc(station.id)}" data-dir="${dirCode}" data-index="${index}">
+              <span class="liquid"></span>
+              <span class="train-time${arriving ? ' now' : ''}">${time}</span>
+              <span class="train-route${train.express ? ' express' : ''}">${esc(train.route)}</span>
+            </span>`;
   }
 
-  function renderDirection(direction) {
+  function renderDirection(direction, station) {
     const destinations = [...new Set(direction.trains.map(t => t.destination).filter(Boolean))];
     const heading = destinations.length
       ? `${direction.label} <span class="dir-dest">to ${esc(destinations.slice(0, 2).join(', '))}</span>`
       : direction.label;
     const trains = direction.trains.length
-      ? direction.trains.map(renderPill).join('')
+      ? direction.trains.map((t, i) => renderTrain(t, i, station, direction.code)).join('')
       : '<span class="empty">No trains scheduled</span>';
     return `<div class="dir-section">
               <div class="dir-label">${direction.code === 'N' ? '↑' : '↓'} ${heading}</div>
@@ -637,10 +810,11 @@
                 <div>
                   <div class="station-name">${esc(station.name)}</div>
                   <div class="station-meta">${stationMeta(station)}</div>
+                  ${renderTravel(station)}
                 </div>
                 <div class="rank">#${index + 1}</div>
               </div>
-              <div class="station-dirs">${station.directions.map(renderDirection).join('')}</div>
+              <div class="station-dirs">${station.directions.map(d => renderDirection(d, station)).join('')}</div>
             </section>`;
   }
 
@@ -662,32 +836,39 @@
   function initMap() {
     if (map.instance || typeof L === 'undefined') return;
 
-    // zoomSnap 0 allows fractional zoom, so the radius circle fills the frame
-    // instead of settling on the next zoom step down.
-    map.instance = L.map('map', { zoomControl: true, attributionControl: true, zoomSnap: 0 });
+    // Integer zoom only. Fractional zoom (zoomSnap: 0) fits the radius circle
+    // more tightly, but it scales every tile — measured 319px for a 256px tile —
+    // and a blurry basemap is a worse trade than a slightly loose fit.
+    map.instance = L.map('map', { zoomControl: true, attributionControl: true });
     // Standard OSM tiles need no API key; CSS inverts them to match the board.
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(map.instance);
     map.instance.setView([DEFAULT_PLACE.lat, DEFAULT_PLACE.lon], 15);
+    // Also covers the container starting at zero size while hidden (a
+    // background tab): the fit reruns when it gains a real width.
+    new ResizeObserver(scheduleFit).observe(document.getElementById('map'));
   }
 
-  // invalidateSize only settles on the next frame, so fit after it — otherwise
-  // the fit measures a stale container and lands a zoom step out.
-  function fitToRadius() {
-    if (!map.instance || !map.circle) return;
+  // Frame whatever is currently the subject: the route trail if one is drawn,
+  // otherwise the search radius.
+  function fitToSubject() {
+    const subject = map.trail ?? map.circle;
+    if (!map.instance || !subject) return;
     map.instance.invalidateSize();
-    requestAnimationFrame(() => {
-      map.instance.fitBounds(map.circle.getBounds(), { padding: [12, 12] });
-    });
+    map.instance.fitBounds(subject.getBounds(), { padding: [12, 12] });
   }
 
-  let resizeTimer;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(fitToRadius, 200);
-  });
+  // Fitting depends on the container's measured size, so drive it off the
+  // element itself. A ResizeObserver fires once on observe and again on every
+  // later resize, which covers both the initial fit and window changes —
+  // window.resize and requestAnimationFrame both missed cases here.
+  let fitTimer;
+  function scheduleFit() {
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(fitToSubject, 80);
+  }
 
   function highlight(stationId, on) {
     map.pins.get(stationId)?.getElement()?.classList.toggle('active', on);
@@ -746,6 +927,7 @@
           }),
         }).addTo(map.instance);
         pin.on('click', () => {
+          showRoute(station.id);
           document.getElementById(`station-${station.id}`)
             ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
@@ -766,22 +948,194 @@
     const view = `${lat},${lon},${data.radiusMiles}`;
     if (map.view !== view) {
       map.view = view;
-      fitToRadius();
+      scheduleFit();
     }
   }
 
   function wireCardHighlights() {
     document.querySelectorAll('.station').forEach(card => {
       const id = card.dataset.id;
-      card.querySelector('.station-head').addEventListener('click', () => {
-        const pin = map.pins.get(id);
-        if (!pin) return;
-        map.instance.panTo(pin.getLatLng());
-        pin.openPopup();
+      // Clicking a train traces the route and opens its focus session; clicking
+      // anywhere else on the row just traces the route.
+      card.addEventListener('click', event => {
+        const train = event.target.closest('.train');
+        if (train && !train.classList.contains('missed')) {
+          showRoute(id, false);
+          startSession(id, train.dataset.dir, Number(train.dataset.index));
+          return;
+        }
+        if (!train) showRoute(id);
       });
       card.addEventListener('mouseenter', () => highlight(id, true));
       card.addEventListener('mouseleave', () => highlight(id, false));
     });
+    if (state.selected) markSelected();
+  }
+
+  // --- Focus session -------------------------------------------
+  // Getting to the platform takes longer than getting to the station door, so
+  // the deadline is the arrival minus the walk minus a fixed buffer.
+  const LEAVE_BUFFER_MIN = 3;
+
+  function leaveDeadline(train, station) {
+    const walk = station?.travel?.walk ?? 0;
+    return train.arrivalTime * 1000 - (walk + LEAVE_BUFFER_MIN) * 60_000;
+  }
+
+  function isCatchable(train, station) {
+    return leaveDeadline(train, station) > Date.now();
+  }
+
+  function clock(ms) {
+    const total = Math.max(0, Math.round(ms / 1000));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  }
+
+  function startSession(stationId, dirCode, index) {
+    const station = state.byId.get(stationId);
+    const train = station?.directions.find(d => d.code === dirCode)?.trains[index];
+    if (!station || !train || !isCatchable(train, station)) return;
+
+    state.session = {
+      stationId,
+      dirCode,
+      route: train.route,
+      express: train.express,
+      destination: train.destination,
+      arrivalTime: train.arrivalTime,
+    };
+    $('focus').hidden = false;
+    renderSession();
+  }
+
+  function endSession() {
+    state.session = null;
+    $('focus').hidden = true;
+  }
+
+  // Re-match the same trip after a refresh so delays move the deadline.
+  function syncSession() {
+    const session = state.session;
+    if (!session) return;
+    const dir = state.byId.get(session.stationId)
+      ?.directions.find(d => d.code === session.dirCode);
+    const match = dir?.trains.find(t =>
+      t.route === session.route && Math.abs(t.arrivalTime - session.arrivalTime) <= 180);
+    if (match) session.arrivalTime = match.arrivalTime;
+  }
+
+  function renderSession() {
+    const session = state.session;
+    if (!session) return;
+
+    const station = state.byId.get(session.stationId);
+    const walk = station?.travel?.walk ?? 0;
+    const untilLeave = leaveDeadline(session, station) - Date.now();
+    const untilTrain = session.arrivalTime * 1000 - Date.now();
+
+    const timer = $('focus-timer');
+    const label = $('focus-label');
+
+    if (untilTrain <= 0) {
+      label.textContent = 'Departed';
+      timer.className = 'focus-timer gone';
+      timer.textContent = 'Train has gone';
+    } else if (untilLeave <= 0) {
+      label.textContent = 'Leave';
+      timer.className = 'focus-timer go';
+      timer.textContent = 'NOW';
+    } else {
+      label.textContent = 'Leave in';
+      timer.className = untilLeave <= 120_000 ? 'focus-timer soon' : 'focus-timer';
+      timer.textContent = clock(untilLeave);
+    }
+
+    const arrival = new Date(session.arrivalTime * 1000);
+    $('focus-train').innerHTML =
+      `${badge(session.route, session.express)}<span>${esc(station?.name ?? '')}</span>`;
+    $('focus-sub').textContent = session.destination
+      ? `to ${session.destination} · arrives ${arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+      : `arrives ${arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    $('focus-math').textContent =
+      `${walk} min walk + ${LEAVE_BUFFER_MIN} min to the platform · train in ${clock(Math.max(0, untilTrain))}`;
+  }
+
+  setInterval(renderSession, 1000);
+
+  // --- Route trail ---------------------------------------------
+  function markSelected() {
+    document.querySelectorAll('.station').forEach(card => {
+      card.classList.toggle('selected', card.dataset.id === state.selected);
+    });
+  }
+
+  function clearRoute() {
+    state.selected = null;
+    map.trail?.remove();
+    map.trail = null;
+    $('route-banner').hidden = true;
+    markSelected();
+    scheduleFit();   // back to framing the radius
+  }
+
+  function drawTrail(geometry) {
+    // GeoJSON is [lon, lat]; Leaflet wants [lat, lon].
+    const points = geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+    map.trail?.remove();
+    map.trail = L.polyline(points, {
+      color: '#3b82f6',
+      weight: 5,
+      opacity: 0.9,
+      lineJoin: 'round',
+    }).addTo(map.instance);
+    scheduleFit();
+  }
+
+  // toggle: clicking the row again clears the trail. Train clicks pass false —
+  // picking a second train at the same station should keep the route drawn.
+  async function showRoute(stationId, toggle = true) {
+    const station = state.byId.get(stationId);
+    if (!station) return;
+    if (state.selected === stationId) {
+      if (toggle) clearRoute();
+      return;
+    }
+
+    state.selected = stationId;
+    markSelected();
+
+    const banner = $('route-banner');
+    banner.hidden = false;
+    banner.className = '';
+    banner.textContent = `Routing to ${station.name}…`;
+
+    const place = state.place ?? DEFAULT_PLACE;
+    const params = new URLSearchParams({
+      lat: place.lat, lon: place.lon, toLat: station.lat, toLon: station.lon,
+    });
+
+    try {
+      const res = await fetch(`/api/route?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (state.selected !== stationId) return;   // superseded by another click
+
+      drawTrail(data.geometry);
+      const best = fastestMode(data.travel);
+      banner.className = '';
+      banner.innerHTML =
+        `<span>Fastest to <b>${esc(station.name)}</b>: ` +
+        `${data.travel[best]} min ${MODE_PHRASE[best]}</span>` +
+        `<span class="muted">${data.travel.streetMiles} mi street route</span>` +
+        `<button id="clear-route">Clear</button>`;
+      $('clear-route').addEventListener('click', event => {
+        event.stopPropagation();
+        clearRoute();
+      });
+    } catch (err) {
+      banner.className = 'warn';
+      banner.textContent = `Could not trace a route to ${station.name}: ${err.message}`;
+    }
   }
 
   // Data fetch — only the trains refresh; the place stays where it was set.
@@ -800,6 +1154,9 @@
       const res = await fetch(`/api/nearby?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      state.byId = new Map(data.stations.map(station => [station.id, station]));
+      if (state.selected && !state.byId.has(state.selected)) clearRoute();
+      syncSession();
 
       $('stations').innerHTML = data.stations.length
         ? data.stations.map(renderStation).join('')
@@ -867,7 +1224,13 @@
 
   $('radius').addEventListener('change', () => {
     localStorage.setItem('maujerdash:radius', $('radius').value);
+    clearRoute();
     refresh();
+  });
+
+  $('focus-exit').addEventListener('click', endSession);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && state.session) endSession();
   });
 
   $('change').addEventListener('click', () => {
