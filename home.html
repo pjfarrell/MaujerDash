@@ -327,16 +327,28 @@
     }
 
     .travel {
-      display: flex;
-      gap: 8px;
       margin-top: 5px;
       font-size: 0.66rem;
       color: var(--muted);
       font-variant-numeric: tabular-nums;
     }
-    .travel .mode b { color: var(--dim); font-weight: 700; }
-    .travel .mode.best { color: var(--white); }
-    .travel .mode.best b { color: var(--white); }
+    .travel b { color: var(--white); font-weight: 700; }
+
+    /* Travel-method selector */
+    .modes { display: inline-flex; gap: 0; }
+
+    .modes button {
+      border-radius: 0;
+      padding: 6px 13px;
+      border-left-width: 0;
+    }
+    .modes button:first-child { border-radius: 99px 0 0 99px; border-left-width: 1px; }
+    .modes button:last-child { border-radius: 0 99px 99px 0; }
+    .modes button[aria-pressed="true"] {
+      background: var(--white);
+      color: #111;
+      border-color: var(--white);
+    }
 
     .station.selected { background: #1a1f26; }
     .station.selected .station-head { box-shadow: inset 3px 0 0 #3b82f6; }
@@ -706,6 +718,11 @@
       <span class="place-label" id="place-label">Locating&hellip;</span>
       <button id="change">Change</button>
     </span>
+    <span class="modes" id="modes" role="group" aria-label="Travel method">
+      <button data-mode="walk" aria-pressed="true">Walk</button>
+      <button data-mode="bike" aria-pressed="false">Bike</button>
+      <button data-mode="drive" aria-pressed="false">Drive</button>
+    </span>
     <select id="radius" aria-label="Search radius">
       <option value="0.25">Within &frac14; mi</option>
       <option value="0.5">Within &frac12; mi</option>
@@ -789,7 +806,27 @@
     selected: null,    // station whose route trail is drawn
     session: null,     // train being counted down to
     weather: null,     // current conditions at the chosen place
+    mode: loadMode(),  // how you plan to reach the station
   };
+
+  function loadMode() {
+    const saved = localStorage.getItem('maujerdash:mode');
+    return ['walk', 'bike', 'drive'].includes(saved) ? saved : 'walk';
+  }
+
+  function setMode(mode) {
+    if (state.mode === mode) return;
+    state.mode = mode;
+    try { localStorage.setItem('maujerdash:mode', mode); } catch {}
+    renderModes();
+    refresh();
+  }
+
+  function renderModes() {
+    for (const button of $('modes').querySelectorAll('button')) {
+      button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode));
+    }
+  }
 
   const $ = id => document.getElementById(id);
 
@@ -913,12 +950,6 @@
   const MODE_PHRASE = { walk: 'on foot', bike: 'by bike', drive: 'by car' };
   const MODE_LABEL = { walk: 'Walk', bike: 'Bike', drive: 'Drive' };
 
-  // Strict < means a tie goes to the earlier, simpler mode: walking beats
-  // cycling beats driving when the rounded minutes are equal.
-  function fastestMode(travel) {
-    return MODES.reduce((best, mode) => (travel[mode] < travel[best] ? mode : best), 'walk');
-  }
-
   function stationMeta(station) {
     // Pinning a station puts you on top of it; "0 ft" alone reads better there.
     if (station.distanceMiles * 5280 < 50) return 'Right here';
@@ -928,12 +959,12 @@
   function renderTravel(station) {
     const travel = station.travel;
     if (!travel) return '';
-    const best = fastestMode(travel);
     const note = travel.estimated ? ' (estimated, routing unavailable)' : ' by street route';
-    return `<div class="travel" title="${esc(travel.streetMiles + ' mi' + note)}">` +
-      MODES.map(mode =>
-        `<span class="mode${mode === best ? ' best' : ''}"><b>${travel[mode]}</b> ${mode}</span>`
-      ).join('') + '</div>';
+    // The chosen method is the headline; the other two stay on the tooltip.
+    const detail = MODES.map(m => `${travel[m]} min ${m}`).join(' · ') +
+      ` — ${travel.streetMiles} mi${note}`;
+    return `<div class="travel" title="${esc(detail)}">` +
+           `<b>${travel[state.mode]} min</b> ${state.mode}</div>`;
   }
 
   // A train 20 minutes out shows a full circle; it drains and reddens from there.
@@ -953,13 +984,15 @@
     const time = arriving ? 'Now' : train.minutesAway;
     const name = train.express ? `${train.route} express` : train.route;
     const usable = modesThatMake(train, station);
-    const catchable = usable.length > 0;
+    const catchable = usable.includes(state.mode);
 
     const where = train.destination ? `${name} to ${train.destination}` : name;
     const when = arriving ? 'arriving' : `in ${train.minutesAway} min`;
     const title = catchable
-      ? `${where} ${when} — you can still make it ${usable.map(m => MODE_PHRASE[m]).join(' / ')}`
-      : `${where} ${when} — too soon to make it from here`;
+      ? `${where} ${when} — you can make it ${MODE_PHRASE[state.mode]}`
+      : usable.length
+        ? `${where} ${when} — too soon ${MODE_PHRASE[state.mode]}, but you could make it ${usable.map(m => MODE_PHRASE[m]).join(' / ')}`
+        : `${where} ${when} — too soon to make it from here`;
 
     return `<span class="train${catchable ? '' : ' missed'}"
                   style="--fill:${fill};--liquid:${color}" title="${esc(title)}"
@@ -1272,8 +1305,10 @@
     return MODES.filter(mode => leaveDeadline(train, station, mode) > Date.now());
   }
 
+  // The board answers for the method you picked, so a train is only shown as
+  // reachable if that method makes it.
   function isCatchable(train, station) {
-    return modesThatMake(train, station).length > 0;
+    return leaveDeadline(train, station, state.mode) > Date.now();
   }
 
   function clock(ms) {
@@ -1295,7 +1330,8 @@
       express: train.express,
       destination: train.destination,
       arrivalTime: train.arrivalTime,
-      mode: usable[0],
+      // Honour the board's method when it still makes the train.
+      mode: usable.includes(state.mode) ? state.mode : usable[0],
     };
     $('focus').hidden = false;
     renderSession();
@@ -1519,11 +1555,10 @@
       if (state.selected !== stationId) return;   // superseded by another click
 
       drawTrail(data.geometry);
-      const best = fastestMode(data.travel);
       banner.className = '';
       banner.innerHTML =
-        `<span>Fastest to <b>${esc(station.name)}</b>: ` +
-        `${data.travel[best]} min ${MODE_PHRASE[best]}</span>` +
+        `<span><b>${esc(station.name)}</b>: ` +
+        `${data.travel[state.mode]} min ${MODE_PHRASE[state.mode]}</span>` +
         `<span class="muted">${data.travel.streetMiles} mi street route</span>` +
         `<button id="clear-route">Clear</button>`;
       $('clear-route').addEventListener('click', event => {
@@ -1626,6 +1661,11 @@
     refresh();
   });
 
+  $('modes').addEventListener('click', event => {
+    const button = event.target.closest('button[data-mode]');
+    if (button) setMode(button.dataset.mode);
+  });
+
   $('weather').addEventListener('click', toggleForecast);
 
   $('focus-exit').addEventListener('click', endSession);
@@ -1667,6 +1707,7 @@
         openPicker();
       }
     }
+    renderModes();
     renderPlace();
     refresh();
     setInterval(refresh, REFRESH_MS);

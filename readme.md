@@ -6,11 +6,13 @@ The map is [Leaflet](https://leafletjs.com/), installed as a dependency and serv
 
 ## Arrivals, travel times and focus sessions
 
-Each train is a circle of liquid: full and green about 20 minutes out, draining and reddening as it approaches. Every station row also shows how long it takes to reach that station on foot, by bike and by car, with the fastest of the three picked out.
+Each train is a circle of liquid: full and green about 20 minutes out, draining and reddening as it approaches.
+
+A **Walk / Bike / Drive** selector in the header sets how you plan to reach a station, and the whole board answers for that choice: each station row shows that method's travel time (the other two stay on the tooltip), and a train is dimmed as unreachable when that method can't get you there in time. The choice is saved for next time.
 
 Clicking a station traces the street route to it on the map. Clicking one of its trains does the same and opens a **focus session** — a full-screen countdown to the moment you need to *leave*, which is the train's arrival minus your travel time minus a 3-minute buffer for actually getting to the platform. It turns amber under two minutes and reads `NOW` in red when the time is up, and it follows the feed, so a delayed train pushes your deadline out.
 
-The session shows the route to the station and a **Walk / Bike / Drive** selector, each labelled with its own travel time. Switching modes recomputes the countdown, and a mode that can no longer make the train is greyed out — so a train 20 minutes away from a station 17 minutes' walk offers only Bike and Drive. A session opens on the simplest mode that still makes it. A train is dimmed in the list, and cannot start a session, only when no mode can reach it in time. Press `Escape` or `End session` to leave.
+The session shows the route to the station and its own **Walk / Bike / Drive** selector, each labelled with its travel time, so you can reconsider for one train without changing the board. Switching recomputes the countdown, and a method that can no longer make the train is greyed out — so a train 20 minutes away from a station 17 minutes' walk offers only Bike and Drive. A session opens on the board's method, or on the simplest one that still makes the train if that method no longer does. Press `Escape` or `End session` to leave.
 
 ## A caveat on travel times
 
