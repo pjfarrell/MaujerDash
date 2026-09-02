@@ -412,7 +412,37 @@
     .focus-sub { font-size: 0.86rem; color: var(--dim); }
     .focus-math { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.03em; }
 
-    #focus-exit { margin-top: 18px; padding: 8px 22px; }
+    .focus-modes { display: flex; gap: 6px; margin-top: 4px; }
+
+    .focus-modes button {
+      padding: 6px 16px;
+      font-size: 0.74rem;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .focus-modes button b { font-variant-numeric: tabular-nums; }
+    .focus-modes button[aria-pressed="true"] {
+      background: var(--white);
+      color: #111;
+      border-color: var(--white);
+    }
+    .focus-modes button:disabled { opacity: 0.35; }
+
+    #focus-map {
+      width: min(720px, 100%);
+      flex: 1 1 auto;
+      min-height: 130px;
+      max-height: 34vh;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .focus-note { font-size: 0.64rem; color: var(--muted); font-style: italic; }
+
+    #focus-exit { padding: 8px 22px; }
 
     @media (prefers-reduced-motion: reduce) {
       .focus-timer.go { animation: none; }
@@ -578,6 +608,9 @@
   <div class="focus-timer" id="focus-timer">--:--</div>
   <div class="focus-train" id="focus-train"></div>
   <div class="focus-sub" id="focus-sub"></div>
+  <div class="focus-modes" id="focus-modes"></div>
+  <div id="focus-map"></div>
+  <div class="focus-note" id="focus-note"></div>
   <div class="focus-math" id="focus-math"></div>
   <button id="focus-exit">End session</button>
 </div>
@@ -732,6 +765,7 @@
 
   const MODES = ['walk', 'bike', 'drive'];
   const MODE_PHRASE = { walk: 'on foot', bike: 'by bike', drive: 'by car' };
+  const MODE_LABEL = { walk: 'Walk', bike: 'Bike', drive: 'Drive' };
 
   // Strict < means a tie goes to the earlier, simpler mode: walking beats
   // cycling beats driving when the rounded minutes are equal.
@@ -772,12 +806,13 @@
     const arriving = train.minutesAway <= 0;
     const time = arriving ? 'Now' : train.minutesAway;
     const name = train.express ? `${train.route} express` : train.route;
-    const catchable = isCatchable(train, station);
+    const usable = modesThatMake(train, station);
+    const catchable = usable.length > 0;
 
     const where = train.destination ? `${name} to ${train.destination}` : name;
     const when = arriving ? 'arriving' : `in ${train.minutesAway} min`;
     const title = catchable
-      ? `${where} ${when} — click to start a focus session`
+      ? `${where} ${when} — you can still make it ${usable.map(m => MODE_PHRASE[m]).join(' / ')}`
       : `${where} ${when} — too soon to make it from here`;
 
     return `<span class="train${catchable ? '' : ' missed'}"
@@ -999,13 +1034,19 @@
   // the deadline is the arrival minus the walk minus a fixed buffer.
   const LEAVE_BUFFER_MIN = 3;
 
-  function leaveDeadline(train, station) {
-    const walk = station?.travel?.walk ?? 0;
-    return train.arrivalTime * 1000 - (walk + LEAVE_BUFFER_MIN) * 60_000;
+  function leaveDeadline(train, station, mode) {
+    const travel = station?.travel?.[mode] ?? 0;
+    return train.arrivalTime * 1000 - (travel + LEAVE_BUFFER_MIN) * 60_000;
+  }
+
+  // MODES runs walk, bike, drive — slowest first — so the first entry that
+  // still makes it is the simplest way to catch this train.
+  function modesThatMake(train, station) {
+    return MODES.filter(mode => leaveDeadline(train, station, mode) > Date.now());
   }
 
   function isCatchable(train, station) {
-    return leaveDeadline(train, station) > Date.now();
+    return modesThatMake(train, station).length > 0;
   }
 
   function clock(ms) {
@@ -1016,7 +1057,9 @@
   function startSession(stationId, dirCode, index) {
     const station = state.byId.get(stationId);
     const train = station?.directions.find(d => d.code === dirCode)?.trains[index];
-    if (!station || !train || !isCatchable(train, station)) return;
+    if (!station || !train) return;
+    const usable = modesThatMake(train, station);
+    if (!usable.length) return;
 
     state.session = {
       stationId,
@@ -1025,14 +1068,94 @@
       express: train.express,
       destination: train.destination,
       arrivalTime: train.arrivalTime,
+      mode: usable[0],
     };
     $('focus').hidden = false;
     renderSession();
+    showFocusRoute(station);
   }
 
   function endSession() {
     state.session = null;
     $('focus').hidden = true;
+  }
+
+  function setSessionMode(mode) {
+    if (!state.session) return;
+    state.session.mode = mode;
+    renderSession();
+  }
+
+  // --- Session map ---------------------------------------------
+  const focusMap = { instance: null, trail: null, marker: null, fitted: false };
+
+  function ensureFocusMap() {
+    if (focusMap.instance || typeof L === 'undefined') return;
+    focusMap.instance = L.map('focus-map', {
+      zoomControl: false,
+      attributionControl: true,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      touchZoom: false,
+    });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap',
+      maxZoom: 19,
+    }).addTo(focusMap.instance);
+    focusMap.instance.setView([DEFAULT_PLACE.lat, DEFAULT_PLACE.lon], 15);
+  }
+
+  // The overlay is hidden until a session starts, so the container has no size
+  // when the map is created — same convergence guard as the main map.
+  function fitFocusMap() {
+    const el = $('focus-map');
+    if (!focusMap.instance || !focusMap.trail) return;
+    if (!el.clientWidth || !el.clientHeight) {
+      setTimeout(fitFocusMap, 200);
+      return;
+    }
+    focusMap.instance.invalidateSize();
+    focusMap.instance.fitBounds(focusMap.trail.getBounds(), { padding: [22, 22] });
+    focusMap.fitted = true;
+  }
+
+  async function showFocusRoute(station) {
+    ensureFocusMap();
+    if (!focusMap.instance) return;
+
+    const place = state.place ?? DEFAULT_PLACE;
+    const params = new URLSearchParams({
+      lat: place.lat, lon: place.lon, toLat: station.lat, toLon: station.lon,
+    });
+
+    try {
+      const res = await fetch(`/api/route?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { geometry } = await res.json();
+      if (!state.session || state.session.stationId !== station.id) return;
+
+      focusMap.trail?.remove();
+      focusMap.trail = L.polyline(
+        geometry.coordinates.map(([lon, lat]) => [lat, lon]),
+        { color: '#3b82f6', weight: 5, opacity: 0.9, lineJoin: 'round' }
+      ).addTo(focusMap.instance);
+
+      focusMap.marker?.remove();
+      focusMap.marker = L.marker([place.lat, place.lon], {
+        icon: L.divIcon({ className: '', html: '<div class="origin-dot"></div>', iconSize: [14, 14] }),
+        interactive: false,
+      }).addTo(focusMap.instance);
+
+      focusMap.fitted = false;
+      fitFocusMap();
+      $('focus-note').textContent =
+        'Street route — the routing service only provides driving geometry';
+    } catch (err) {
+      $('focus-note').textContent = `Could not draw the route: ${err.message}`;
+    }
   }
 
   // Re-match the same trip after a refresh so delays move the deadline.
@@ -1051,9 +1174,27 @@
     if (!session) return;
 
     const station = state.byId.get(session.stationId);
-    const walk = station?.travel?.walk ?? 0;
-    const untilLeave = leaveDeadline(session, station) - Date.now();
+    const mode = session.mode;
+    const travel = station?.travel?.[mode] ?? 0;
+    const untilLeave = leaveDeadline(session, station, mode) - Date.now();
     const untilTrain = session.arrivalTime * 1000 - Date.now();
+
+    // One button per mode, each showing what that choice costs you. This runs
+    // every second, so only touch the DOM when something actually changed.
+    const buttons = $('focus-modes');
+    const key = MODES
+      .map(m => `${station?.travel?.[m]}:${leaveDeadline(session, station, m) > Date.now()}`)
+      .join('|') + `|${mode}`;
+    if (buttons.dataset.key !== key) {
+      buttons.dataset.key = key;
+      buttons.innerHTML = MODES.map(m => {
+        const minutes = station?.travel?.[m] ?? 0;
+        const makesIt = leaveDeadline(session, station, m) > Date.now();
+        return `<button data-mode="${m}" aria-pressed="${m === mode}"${makesIt ? '' : ' disabled'}
+                        title="${makesIt ? '' : 'Too late to make this train ' + MODE_PHRASE[m]}">` +
+               `${MODE_LABEL[m]} <b>${minutes}</b></button>`;
+      }).join('');
+    }
 
     const timer = $('focus-timer');
     const label = $('focus-label');
@@ -1079,7 +1220,8 @@
       ? `to ${session.destination} · arrives ${arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
       : `arrives ${arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
     $('focus-math').textContent =
-      `${walk} min walk + ${LEAVE_BUFFER_MIN} min to the platform · train in ${clock(Math.max(0, untilTrain))}`;
+      `${travel} min ${MODE_PHRASE[mode]} + ${LEAVE_BUFFER_MIN} min to the platform` +
+      ` · train in ${clock(Math.max(0, untilTrain))}`;
   }
 
   setInterval(renderSession, 1000);
@@ -1251,6 +1393,10 @@
   });
 
   $('focus-exit').addEventListener('click', endSession);
+  $('focus-modes').addEventListener('click', event => {
+    const button = event.target.closest('button[data-mode]');
+    if (button && !button.disabled) setSessionMode(button.dataset.mode);
+  });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && state.session) endSession();
   });

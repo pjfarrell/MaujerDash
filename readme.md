@@ -8,13 +8,15 @@ The map is [Leaflet](https://leafletjs.com/), installed as a dependency and serv
 
 Each train is a circle of liquid: full and green about 20 minutes out, draining and reddening as it approaches. Every station row also shows how long it takes to reach that station on foot, by bike and by car, with the fastest of the three picked out.
 
-Clicking a station traces the street route to it on the map. Clicking one of its trains does the same and opens a **focus session** — a full-screen countdown to the moment you need to *leave*, which is the train's arrival minus the walk minus a 3-minute buffer for actually getting to the platform. It turns amber under two minutes and reads `NOW` in red when the time is up, and it follows the feed, so a delayed train pushes your deadline out. Trains you can no longer reach in time are dimmed and cannot start a session. Press `Escape` or `End session` to leave.
+Clicking a station traces the street route to it on the map. Clicking one of its trains does the same and opens a **focus session** — a full-screen countdown to the moment you need to *leave*, which is the train's arrival minus your travel time minus a 3-minute buffer for actually getting to the platform. It turns amber under two minutes and reads `NOW` in red when the time is up, and it follows the feed, so a delayed train pushes your deadline out.
+
+The session shows the route to the station and a **Walk / Bike / Drive** selector, each labelled with its own travel time. Switching modes recomputes the countdown, and a mode that can no longer make the train is greyed out — so a train 20 minutes away from a station 17 minutes' walk offers only Bike and Drive. A session opens on the simplest mode that still makes it. A train is dimmed in the list, and cannot start a session, only when no mode can reach it in time. Press `Escape` or `End session` to leave.
 
 ## A caveat on travel times
 
 Travel times come from the public [OSRM](https://project-osrm.org/) demo server, which only runs the **car** profile — it returns identical numbers whatever profile you ask it for. So the app takes the *street distance* from OSRM and derives walking (3 mph) and cycling (10 mph) times from it, and uses OSRM's duration only for driving. Two consequences worth knowing:
 
-- The drawn route is a driving route, so a walking path may differ where one-way streets are involved.
+- The drawn route is a driving route, so a walking path may differ where one-way streets are involved. This is why the Walk / Bike / Drive selector changes the *times* but not the drawn line — the public router has no walking or cycling geometry to give. Pointing `OSRM_BASE` at an instance with foot and bike profiles, or swapping in a router like Valhalla, would make the paths differ too.
 - Walking and cycling times are steady-pace estimates; they do not account for hills, lights or waiting to cross.
 
 If OSRM is unreachable the app falls back to straight-line distance padded by 30% for the street grid, and flags it as `estimated` in the API and in the row's tooltip.
