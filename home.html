@@ -822,7 +822,9 @@
   // Location picker
   function openPicker() {
     $('picker').hidden = false;
-    $('query').focus();
+    // preventScroll: on first load the picker opens by itself, and a focus that
+    // scrolls would push the header off screen.
+    $('query').focus({ preventScroll: true });
   }
 
   function closePicker() {
