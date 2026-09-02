@@ -353,6 +353,20 @@ const WMO = {
   95: ['Thunderstorm', '⛈️', '⛈️'], 96: ['Thunderstorm', '⛈️', '⛈️'], 99: ['Thunderstorm', '⛈️', '⛈️'],
 };
 
+// Open-Meteo returns local wall-clock strings for the requested location, so
+// format them by hand rather than through Date, which would reinterpret them
+// in the server's timezone.
+function hourLabel(iso) {
+  const hour = Number(iso.slice(11, 13));
+  return `${hour % 12 === 0 ? 12 : hour % 12} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+function timeLabel(iso) {
+  if (!iso) return null;
+  const hour = Number(iso.slice(11, 13));
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${iso.slice(14, 16)} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
 app.get('/api/weather', async (req, res) => {
   const origin = readOrigin(req.query);
   const key = `${origin.lat.toFixed(2)},${origin.lon.toFixed(2)}`;
@@ -363,6 +377,9 @@ app.get('/api/weather', async (req, res) => {
     latitude: origin.lat,
     longitude: origin.lon,
     current: 'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,is_day',
+    hourly: 'temperature_2m,weather_code,precipitation_probability,is_day',
+    daily: 'temperature_2m_max,temperature_2m_min,sunrise,sunset',
+    forecast_days: '1',
     temperature_unit: 'fahrenheit',
     wind_speed_unit: 'mph',
     precipitation_unit: 'inch',
@@ -375,19 +392,42 @@ app.get('/api/weather', async (req, res) => {
     });
     if (!response.ok) throw new Error(`Weather ${response.status}: ${response.statusText}`);
 
-    const now = (await response.json()).current;
+    const body = await response.json();
+    const now = body.current;
     const isDay = now.is_day === 1;
-    const [description, dayIcon, nightIcon] = WMO[now.weather_code] ?? ['Unknown', '🌡️', '🌡️'];
+    const conditions = (code, day) => {
+      const [description, dayIcon, nightIcon] = WMO[code] ?? ['Unknown', '🌡️', '🌡️'];
+      return { description, icon: day ? dayIcon : nightIcon };
+    };
+    const current = conditions(now.weather_code, isDay);
 
+    const hourly = (body.hourly?.time ?? []).map((time, i) => ({
+      time,
+      label: hourLabel(time),
+      temperature: Math.round(body.hourly.temperature_2m[i]),
+      precipChance: body.hourly.precipitation_probability?.[i] ?? 0,
+      // Same hour as the current observation, in the location's own timezone.
+      isNow: time.slice(0, 13) === now.time.slice(0, 13),
+      ...conditions(body.hourly.weather_code[i], body.hourly.is_day?.[i] === 1),
+    }));
+
+    const daily = body.daily ?? {};
     const value = {
       temperature: Math.round(now.temperature_2m),
       feelsLike: Math.round(now.apparent_temperature),
       precipitation: now.precipitation,
       windMph: Math.round(now.wind_speed_10m),
-      description,
-      icon: isDay ? dayIcon : nightIcon,
+      description: current.description,
+      icon: current.icon,
       isDay,
       observedAt: now.time,
+      today: {
+        high: Math.round(daily.temperature_2m_max?.[0] ?? now.temperature_2m),
+        low: Math.round(daily.temperature_2m_min?.[0] ?? now.temperature_2m),
+        sunrise: timeLabel(daily.sunrise?.[0]),
+        sunset: timeLabel(daily.sunset?.[0]),
+      },
+      hourly,
     };
     weatherCache.set(key, { at: Date.now(), value });
     if (weatherCache.size > 50) weatherCache.delete(weatherCache.keys().next().value);
