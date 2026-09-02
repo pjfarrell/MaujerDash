@@ -119,20 +119,29 @@
     .wx-hour.now { background: rgba(240, 240, 240, 0.08); }
     .wx-hour.now .wx-label { color: var(--white); font-weight: 700; }
 
-    .wx-temp-h { font-size: 0.72rem; font-weight: 700; color: var(--white); }
+    .wx-temp-h { font-size: 0.72rem; font-weight: 700; color: var(--white); line-height: 1.2; }
 
-    /* Height maps the hour's temperature across the day's range */
-    .wx-bar {
+    /* The bar grows upward inside a fixed-height track, so a warmer hour is the
+       only thing that raises it and every row below stays on one line. */
+    .wx-track {
+      height: 40px;
       width: 7px;
+      display: flex;
+      align-items: flex-end;
+      flex: 0 0 auto;
+    }
+
+    .wx-bar {
+      width: 100%;
       border-radius: 99px;
       background: linear-gradient(to top, #3b82f6, var(--yellow));
       opacity: 0.75;
     }
     .wx-hour.now .wx-bar { opacity: 1; }
 
-    .wx-icon { font-size: 0.86rem; line-height: 1; }
-    .wx-label { font-size: 0.6rem; color: var(--muted); white-space: nowrap; }
-    .wx-precip { font-size: 0.58rem; color: #5b9bd5; min-height: 0.8em; }
+    .wx-icon { font-size: 0.86rem; line-height: 1.2; height: 1.2em; }
+    .wx-label { font-size: 0.6rem; color: var(--muted); white-space: nowrap; line-height: 1.2; }
+    .wx-precip { font-size: 0.58rem; color: #5b9bd5; height: 1.2em; line-height: 1.2; }
 
     .controls {
       display: flex;
@@ -1016,7 +1025,9 @@
     const temps = weather.hourly.map(h => h.temperature);
     const low = Math.min(...temps);
     const high = Math.max(...temps);
-    const barHeight = t => 8 + (high === low ? 16 : ((t - low) / (high - low)) * 30);
+    // Percentage of the track: equal temperatures give equal bars, and only a
+    // warmer hour raises one. The floor keeps the coldest hour visible.
+    const barHeight = t => (high === low ? 50 : 12 + ((t - low) / (high - low)) * 88);
 
     $('wx-panel').innerHTML = `
       <div class="wx-head">
@@ -1031,7 +1042,8 @@
         <div class="wx-hour${hour.isNow ? ' now' : ''}"
              title="${esc(`${hour.label} · ${hour.description} · ${hour.precipChance}% chance of rain`)}">
           <span class="wx-temp-h">${hour.temperature}°</span>
-          <span class="wx-bar" style="height:${barHeight(hour.temperature).toFixed(0)}px"></span>
+          <span class="wx-track"><span class="wx-bar"
+                style="height:${barHeight(hour.temperature).toFixed(1)}%"></span></span>
           <span class="wx-icon">${hour.icon}</span>
           <span class="wx-label">${esc(hour.label)}</span>
           <span class="wx-precip">${hour.precipChance > 0 ? hour.precipChance + '%' : ''}</span>
