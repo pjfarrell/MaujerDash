@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lorimer / Metropolitan Av</title>
+  <title>Nearby Trains</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -11,12 +11,12 @@
       --bg:      #111;
       --surface: #1b1b1b;
       --border:  #2c2c2c;
-      --l:       #a7a9ac;
-      --g:       #6cbe45;
       --red:     #e03131;
       --yellow:  #f5a623;
+      --green:   #6cbe45;
       --white:   #f0f0f0;
       --muted:   #5a5a5a;
+      --dim:     #8a8a8a;
     }
 
     html, body { height: 100%; }
@@ -30,19 +30,18 @@
       min-height: 100vh;
     }
 
-    /* ── Header ─────────────────────────────── */
+    /* Header */
     header {
-      padding: 20px 24px 15px;
+      padding: 18px 20px 14px;
       border-bottom: 1px solid var(--border);
       text-align: center;
     }
 
     header h1 {
-      font-size: clamp(1rem, 3.5vw, 1.5rem);
+      font-size: clamp(1rem, 3.5vw, 1.4rem);
       font-weight: 800;
       letter-spacing: 0.05em;
       text-transform: uppercase;
-      color: var(--white);
     }
 
     #clock {
@@ -53,58 +52,104 @@
       letter-spacing: 0.02em;
     }
 
-    /* ── Board grid ──────────────────────────── */
-    .board {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+    .controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button, select, input {
+      font: inherit;
+      font-size: 0.78rem;
+      color: var(--white);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 6px 14px;
+      cursor: pointer;
+    }
+    button:hover, select:hover, input:focus { border-color: #444; }
+    button:disabled { opacity: 0.5; cursor: default; }
+
+    #location-note {
+      margin-top: 10px;
+      font-size: 0.72rem;
+      color: var(--dim);
+      letter-spacing: 0.02em;
+    }
+    #location-note.warn { color: var(--yellow); }
+
+    /* Station list, nearest first */
+    main {
       flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      align-content: start;
+      gap: 1px;
+      background: var(--border);
+      border-bottom: 1px solid var(--border);
     }
 
-    @media (max-width: 480px) {
-      .board { grid-template-columns: 1fr; }
-    }
-
-    .line {
-      border-right: 1px solid var(--border);
+    .station {
+      background: var(--bg);
       display: flex;
       flex-direction: column;
     }
-    .line:last-child { border-right: none; }
 
-    /* ── Line header ─────────────────────────── */
-    .line-header {
+    .station-head {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 15px 20px;
+      gap: 11px;
+      padding: 13px 18px;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
     }
 
+    .badges { display: flex; gap: 4px; flex-shrink: 0; }
+
     .badge {
-      width: 38px;
-      height: 38px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.15rem;
+      font-size: 0.82rem;
       font-weight: 900;
-      color: #000;
       flex-shrink: 0;
     }
-    .badge.L { background: var(--l); }
-    .badge.G { background: var(--g); }
+
+    /* Express runs are signed as a diamond, same as on the platform */
+    .badge.express { border-radius: 4px; transform: rotate(45deg); }
+    .badge.express > span { display: block; transform: rotate(-45deg); }
 
     .station-name {
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 700;
       letter-spacing: 0.02em;
     }
 
-    /* ── Direction sections ──────────────────── */
+    .station-meta {
+      font-size: 0.68rem;
+      color: var(--dim);
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .rank {
+      margin-left: auto;
+      font-size: 0.62rem;
+      font-weight: 700;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Direction sections */
     .dir-section {
-      padding: 14px 18px 16px;
+      padding: 12px 18px 14px;
       border-bottom: 1px solid var(--border);
       flex: 1;
     }
@@ -116,66 +161,64 @@
       letter-spacing: 0.13em;
       text-transform: uppercase;
       color: var(--muted);
-      margin-bottom: 10px;
+      margin-bottom: 9px;
+    }
+    .dir-dest {
+      font-weight: 400;
+      letter-spacing: 0.05em;
+      text-transform: none;
+      color: #4a4a4a;
     }
 
     .trains {
       display: flex;
       flex-wrap: wrap;
-      gap: 7px;
-      min-height: 30px;
+      gap: 6px;
+      min-height: 28px;
       align-items: center;
     }
 
-    /* ── Arrival pills ───────────────────────── */
+    /* Arrival pills */
     .pill {
       display: inline-flex;
-      align-items: baseline;
-      gap: 2px;
-      padding: 5px 13px;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 11px 3px 3px;
       border-radius: 99px;
       border: 1.5px solid;
       font-variant-numeric: tabular-nums;
-      font-size: 0.92rem;
+      font-size: 0.88rem;
       font-weight: 700;
       line-height: 1;
     }
 
-    .pill.now {
-      background: rgba(224, 49, 49, 0.14);
-      border-color: var(--red);
-      color: var(--red);
-    }
-    .pill.soon {
-      background: rgba(245, 166, 35, 0.14);
-      border-color: var(--yellow);
-      color: var(--yellow);
-    }
-    .pill.coming {
-      background: rgba(240, 240, 240, 0.05);
-      border-color: #3a3a3a;
-      color: var(--white);
-    }
+    .pill.now    { background: rgba(224, 49, 49, 0.14);  border-color: var(--red);    color: var(--red); }
+    .pill.soon   { background: rgba(245, 166, 35, 0.14); border-color: var(--yellow); color: var(--yellow); }
+    .pill.coming { background: rgba(240, 240, 240, 0.05); border-color: #3a3a3a;      color: var(--white); }
+
+    .pill .badge { width: 21px; height: 21px; font-size: 0.68rem; }
+    /* A rotated square is as wide as its diagonal, so shrink it to fit the pill */
+    .pill .badge.express { width: 15px; height: 15px; font-size: 0.6rem; }
 
     .pill-unit {
-      font-size: 0.62rem;
+      font-size: 0.6rem;
       font-weight: 400;
       opacity: 0.6;
+      margin-left: -2px;
     }
 
     .empty {
       color: var(--muted);
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-style: italic;
     }
 
-    /* ── Footer ──────────────────────────────── */
+    /* Footer */
     footer {
       padding: 9px 24px;
       text-align: center;
       font-size: 0.7rem;
       color: var(--muted);
-      border-top: 1px solid var(--border);
       letter-spacing: 0.02em;
     }
 
@@ -189,61 +232,198 @@
       vertical-align: middle;
       transition: background 0.4s;
     }
-    .dot.ok  { background: var(--g); }
+    .dot.ok  { background: var(--green); }
     .dot.err { background: var(--red); }
+
+    /* Location picker */
+    [hidden] { display: none !important; }
+
+    .place-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      max-width: 100%;
+      padding: 5px 6px 5px 14px;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      background: var(--surface);
+    }
+
+    .place-prefix {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.11em;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .place-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .place-label.default { color: var(--dim); font-weight: 400; font-style: italic; }
+
+    .picker {
+      max-width: 520px;
+      margin: 12px auto 0;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      text-align: left;
+    }
+
+    .picker-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .picker-or {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      color: var(--muted);
+    }
+
+    #search-form { display: flex; gap: 6px; flex: 1; min-width: 220px; }
+
+    #query {
+      flex: 1;
+      min-width: 0;
+      border-radius: 8px;
+      padding: 7px 12px;
+      background: var(--bg);
+    }
+    #query::placeholder { color: var(--muted); }
+
+    .results { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+
+    .result {
+      text-align: left;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.76rem;
+      line-height: 1.35;
+      background: var(--bg);
+      white-space: normal;
+    }
+    .result .kind {
+      display: block;
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .results .empty { padding: 6px 2px; }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>Lorimer St &nbsp;/&nbsp; Metropolitan Av</h1>
+  <h1>Nearby Trains</h1>
   <div id="clock"></div>
+  <div class="controls">
+    <span class="place-bar">
+      <span class="place-prefix" id="place-prefix" hidden>Showing stations near</span>
+      <span class="place-label" id="place-label">Locating&hellip;</span>
+      <button id="change">Change</button>
+    </span>
+    <select id="radius" aria-label="Search radius">
+      <option value="0.25">Within &frac14; mi</option>
+      <option value="0.5">Within &frac12; mi</option>
+      <option value="1">Within 1 mi</option>
+      <option value="2">Within 2 mi</option>
+    </select>
+  </div>
+
+  <div class="picker" id="picker" hidden>
+    <div class="picker-row">
+      <button id="locate">Use my location</button>
+      <span class="picker-or">or</span>
+      <form id="search-form">
+        <input id="query" type="text" autocomplete="off"
+               placeholder="Address, station, or lat, lon" aria-label="Location">
+        <button type="submit">Search</button>
+      </form>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <div id="location-note"></div>
 </header>
 
-<div class="board">
-
-  <div class="line">
-    <div class="line-header">
-      <div class="badge L">L</div>
-      <div class="station-name">Lorimer St</div>
-    </div>
-    <div id="L-N" class="dir-section">
-      <div class="dir-label">↑ toward 8 Av / Manhattan</div>
-      <div class="trains"><span class="empty">Loading…</span></div>
-    </div>
-    <div id="L-S" class="dir-section">
-      <div class="dir-label">↓ toward Canarsie</div>
-      <div class="trains"><span class="empty">Loading…</span></div>
-    </div>
-  </div>
-
-  <div class="line">
-    <div class="line-header">
-      <div class="badge G">G</div>
-      <div class="station-name">Metropolitan Av</div>
-    </div>
-    <div id="G-N" class="dir-section">
-      <div class="dir-label">↑ toward Court Sq–23 St</div>
-      <div class="trains"><span class="empty">Loading…</span></div>
-    </div>
-    <div id="G-S" class="dir-section">
-      <div class="dir-label">↓ toward Church Av</div>
-      <div class="trains"><span class="empty">Loading…</span></div>
-    </div>
-  </div>
-
-</div>
+<main id="stations"></main>
 
 <footer>
   <span class="dot" id="dot"></span>
-  <span id="status">Connecting to MTA…</span>
+  <span id="status">Connecting to MTA&hellip;</span>
 </footer>
 
 <script>
-  // ── Clock ──────────────────────────────────────────
+  // Official line colors, so a station's badges read the way the signage does.
+  const ROUTE_COLORS = {
+    1: '#ee352e', 2: '#ee352e', 3: '#ee352e',
+    4: '#00933c', 5: '#00933c', 6: '#00933c',
+    7: '#b933ad',
+    A: '#0039a6', C: '#0039a6', E: '#0039a6',
+    B: '#ff6319', D: '#ff6319', F: '#ff6319', M: '#ff6319',
+    G: '#6cbe45',
+    J: '#996633', Z: '#996633',
+    N: '#fccc0a', Q: '#fccc0a', R: '#fccc0a', W: '#fccc0a',
+    L: '#a7a9ac',
+    S: '#808183', SIR: '#0078c6', SI: '#0078c6',
+  };
+  const DARK_TEXT = new Set(['N', 'Q', 'R', 'W', 'L', 'S']);
+
+  const REFRESH_MS = 15_000;
+  const PLACE_KEY = 'maujerdash:place';
+
+  // The app's namesake, shown until someone picks a location of their own.
+  const DEFAULT_PLACE = {
+    lat: 40.7118, lon: -73.943, label: 'Maujer St, Brooklyn', source: 'default',
+  };
+
+  // The place stays put once chosen — only the arrival times refresh.
+  const state = {
+    place: loadPlace(),
+    locating: false,
+    note: null,
+  };
+
+  const $ = id => document.getElementById(id);
+
+  function loadPlace() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PLACE_KEY));
+      return Number.isFinite(saved?.lat) && Number.isFinite(saved?.lon) ? saved : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function setPlace(place) {
+    state.place = place;
+    state.note = null;
+    try {
+      localStorage.setItem(PLACE_KEY, JSON.stringify(place));
+    } catch {
+      state.note = 'This location could not be saved for next time';
+    }
+    closePicker();
+    renderPlace();
+    refresh();
+  }
+
+  // Clock
   function tick() {
     const now = new Date();
-    document.getElementById('clock').textContent =
+    $('clock').textContent =
       now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) +
       ' · ' +
       now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -251,55 +431,255 @@
   tick();
   setInterval(tick, 1000);
 
-  // ── Rendering ──────────────────────────────────────
-  function pillClass(min) {
-    if (min <= 0) return 'now';
-    if (min <= 3) return 'soon';
+  // Geolocation — asked for on demand, never on a timer.
+  function requestLocation() {
+    return new Promise(resolve => {
+      if (!navigator.geolocation) {
+        state.note = 'This browser has no location support';
+        return resolve(null);
+      }
+      if (!window.isSecureContext) {
+        state.note = 'Location needs https (or localhost) — search for a place instead';
+        return resolve(null);
+      }
+
+      state.locating = true;
+      renderPlace();
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          state.locating = false;
+          state.note = null;
+          resolve({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            label: 'my location',
+            source: 'device',
+            accuracy: Math.round(pos.coords.accuracy),
+          });
+        },
+        err => {
+          state.locating = false;
+          state.note = err.code === err.PERMISSION_DENIED
+            ? 'Location permission denied — search for a place instead'
+            : 'Could not get your location';
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 }
+      );
+    });
+  }
+
+  function renderPlace(data) {
+    const label = $('place-label');
+    const note = $('location-note');
+    const place = state.place ?? DEFAULT_PLACE;
+
+    if (state.locating) {
+      $('place-prefix').hidden = true;
+      label.className = 'place-label';
+      label.textContent = 'Locating…';
+      label.removeAttribute('title');
+    } else {
+      $('place-prefix').hidden = false;
+      label.className = place.source === 'default' ? 'place-label default' : 'place-label';
+      label.textContent = place.label;
+      // Coordinates and GPS accuracy are detail, not headline: keep them on hover.
+      const accuracy = place.accuracy ? ` (accurate to about ${place.accuracy} m)` : '';
+      label.title = `${place.lat.toFixed(5)}, ${place.lon.toFixed(5)}${accuracy}`;
+    }
+
+    const messages = [];
+    if (state.note) messages.push(state.note);
+    if (data?.expandedSearch) messages.push('Nothing in range — showing the closest stations');
+    note.className = messages.length ? 'warn' : '';
+    note.textContent = messages.join(' · ');
+  }
+
+  // Rendering
+  function formatDistance(miles) {
+    const feet = miles * 5280;
+    if (feet < 1000) return `${Math.round(feet / 10) * 10} ft`;
+    return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
+  }
+
+  function badge(route, express) {
+    const color = ROUTE_COLORS[route] || '#808183';
+    const text = DARK_TEXT.has(route) ? '#000' : '#fff';
+    return `<span class="badge${express ? ' express' : ''}" style="background:${color};color:${text}">` +
+           `<span>${esc(route)}</span></span>`;
+  }
+
+  function stationMeta(station) {
+    // Pinning a station puts you on top of it; "0 ft · 1 min walk" reads badly.
+    if (station.distanceMiles * 5280 < 50) return 'Right here';
+    return `${formatDistance(station.distanceMiles)} · ${station.walkMinutes} min walk`;
+  }
+
+  function pillClass(minutes) {
+    if (minutes <= 0) return 'now';
+    if (minutes <= 3) return 'soon';
     return 'coming';
   }
 
-  function renderPill(t) {
-    const cls = pillClass(t.minutesAway);
-    const inner = t.minutesAway <= 0
+  function renderPill(train) {
+    const time = train.minutesAway <= 0
       ? 'Now'
-      : `${t.minutesAway}<span class="pill-unit"> min</span>`;
-    return `<span class="pill ${cls}">${inner}</span>`;
+      : `${train.minutesAway}<span class="pill-unit">min</span>`;
+    const name = train.express ? `${train.route} express` : train.route;
+    const title = train.destination ? `${name} to ${train.destination}` : name;
+    return `<span class="pill ${pillClass(train.minutesAway)}" title="${esc(title)}">` +
+           `${badge(train.route, train.express)}${time}</span>`;
   }
 
-  function renderSection(id, trains) {
-    const section = document.getElementById(id);
-    if (!section) return;
-    const container = section.querySelector('.trains');
-    container.innerHTML = trains.length === 0
-      ? '<span class="empty">No trains scheduled</span>'
-      : trains.slice(0, 5).map(renderPill).join('');
+  function renderDirection(direction) {
+    const destinations = [...new Set(direction.trains.map(t => t.destination).filter(Boolean))];
+    const heading = destinations.length
+      ? `${direction.label} <span class="dir-dest">to ${esc(destinations.slice(0, 2).join(', '))}</span>`
+      : direction.label;
+    const trains = direction.trains.length
+      ? direction.trains.map(renderPill).join('')
+      : '<span class="empty">No trains scheduled</span>';
+    return `<div class="dir-section">
+              <div class="dir-label">${direction.code === 'N' ? '↑' : '↓'} ${heading}</div>
+              <div class="trains">${trains}</div>
+            </div>`;
   }
 
-  // ── Data fetch ─────────────────────────────────────
-  async function fetchAndRender() {
-    const dot = document.getElementById('dot');
-    const status = document.getElementById('status');
+  function renderStation(station, index) {
+    return `<section class="station">
+              <div class="station-head">
+                <div class="badges">${station.routes.map(route => badge(route)).join('')}</div>
+                <div>
+                  <div class="station-name">${esc(station.name)}</div>
+                  <div class="station-meta">${stationMeta(station)}</div>
+                </div>
+                <div class="rank">#${index + 1}</div>
+              </div>
+              ${station.directions.map(renderDirection).join('')}
+            </section>`;
+  }
+
+  function esc(text) {
+    return String(text).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // Data fetch — only the trains refresh; the place stays where it was set.
+  async function refresh() {
+    const place = state.place ?? DEFAULT_PLACE;
+    const params = new URLSearchParams({
+      lat: place.lat,
+      lon: place.lon,
+      radius: $('radius').value,
+      limit: 10,
+    });
+
+    const dot = $('dot');
+    const status = $('status');
     try {
-      const res = await fetch('/api/trains');
+      const res = await fetch(`/api/nearby?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
-      const by = (arr, dir) => arr.filter(t => t.direction === dir);
-      renderSection('L-N', by(data.L, 'N'));
-      renderSection('L-S', by(data.L, 'S'));
-      renderSection('G-N', by(data.G, 'N'));
-      renderSection('G-S', by(data.G, 'S'));
+      $('stations').innerHTML = data.stations.length
+        ? data.stations.map(renderStation).join('')
+        : '<section class="station"><div class="dir-section"><span class="empty">No stations found</span></div></section>';
+      renderPlace(data);
 
       dot.className = 'dot ok';
-      status.textContent = 'Updated ' + new Date(data.updatedAt).toLocaleTimeString();
+      const stale = data.feedErrors?.length
+        ? ` · ${data.feedErrors.length} feed(s) delayed`
+        : '';
+      status.textContent = 'Updated ' + new Date(data.updatedAt).toLocaleTimeString() + stale;
     } catch (err) {
       dot.className = 'dot err';
       status.textContent = 'Error: ' + err.message;
     }
   }
 
-  fetchAndRender();
-  setInterval(fetchAndRender, 15_000);
+  // Location picker
+  function openPicker() {
+    $('picker').hidden = false;
+    $('query').focus();
+  }
+
+  function closePicker() {
+    $('picker').hidden = true;
+    $('results').innerHTML = '';
+    $('query').value = '';
+  }
+
+  function renderResults(results) {
+    $('results').innerHTML = results.length
+      ? results.map((r, i) =>
+          `<button class="result" data-index="${i}">
+             <span class="kind">${r.source}</span>${esc(r.label)}
+           </button>`).join('')
+      : '<span class="empty">Nothing found — try an address, a station, or "40.7118, -73.943"</span>';
+
+    $('results').querySelectorAll('.result').forEach(button => {
+      button.addEventListener('click', () => {
+        const { lat, lon, label } = results[Number(button.dataset.index)];
+        setPlace({ lat, lon, label, source: 'search' });
+      });
+    });
+  }
+
+  async function search(query) {
+    $('results').innerHTML = '<span class="empty">Searching…</span>';
+    try {
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderResults(data.results);
+    } catch (err) {
+      $('results').innerHTML = `<span class="empty">Search failed: ${esc(err.message)}</span>`;
+    }
+  }
+
+  // Wiring
+  const savedRadius = localStorage.getItem('maujerdash:radius');
+  if (savedRadius) $('radius').value = savedRadius;
+
+  $('radius').addEventListener('change', () => {
+    localStorage.setItem('maujerdash:radius', $('radius').value);
+    refresh();
+  });
+
+  $('change').addEventListener('click', () => {
+    if ($('picker').hidden) openPicker();
+    else closePicker();
+  });
+
+  $('locate').addEventListener('click', async () => {
+    $('locate').disabled = true;
+    const fix = await requestLocation();
+    $('locate').disabled = false;
+    if (fix) setPlace(fix);
+    else renderPlace();
+  });
+
+  $('search-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const query = $('query').value.trim();
+    if (query) search(query);
+  });
+
+  (async () => {
+    // Ask once on a first visit; after that the saved place is used as-is.
+    if (!state.place) {
+      const fix = await requestLocation();
+      if (fix) {
+        state.place = fix;
+        try { localStorage.setItem(PLACE_KEY, JSON.stringify(fix)); } catch {}
+      } else {
+        openPicker();
+      }
+    }
+    renderPlace();
+    refresh();
+    setInterval(refresh, REFRESH_MS);
+  })();
 </script>
 </body>
 </html>
