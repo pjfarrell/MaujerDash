@@ -141,7 +141,18 @@
 
     .wx-icon { font-size: 0.86rem; line-height: 1.2; height: 1.2em; }
     .wx-label { font-size: 0.6rem; color: var(--muted); white-space: nowrap; line-height: 1.2; }
-    .wx-precip { font-size: 0.58rem; color: #5b9bd5; height: 1.2em; line-height: 1.2; }
+    .wx-precip {
+      font-size: 0.58rem;
+      color: #5b9bd5;
+      height: 1.2em;
+      line-height: 1.2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      white-space: nowrap;
+    }
+    .wx-drop { font-size: 0.52rem; }
 
     .controls {
       display: flex;
@@ -1046,7 +1057,8 @@
                 style="height:${barHeight(hour.temperature).toFixed(1)}%"></span></span>
           <span class="wx-icon">${hour.icon}</span>
           <span class="wx-label">${esc(hour.label)}</span>
-          <span class="wx-precip">${hour.precipChance > 0 ? hour.precipChance + '%' : ''}</span>
+          <span class="wx-precip">${hour.precipChance > 0
+            ? `<span class="wx-drop">💧</span>${hour.precipChance}%` : ''}</span>
         </div>`).join('')}</div>`;
 
     $('wx-panel').querySelector('.wx-hour.now')
