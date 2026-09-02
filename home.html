@@ -1292,7 +1292,7 @@
   // --- Focus session -------------------------------------------
   // Getting to the platform takes longer than getting to the station door, so
   // the deadline is the arrival minus the walk minus a fixed buffer.
-  const LEAVE_BUFFER_MIN = 3;
+  const LEAVE_BUFFER_MIN = 2;
 
   function leaveDeadline(train, station, mode) {
     const travel = station?.travel?.[mode] ?? 0;
