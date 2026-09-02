@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nearby Trains</title>
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <script src="/vendor/leaflet/leaflet.js" defer></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -82,12 +84,76 @@
     }
     #location-note.warn { color: var(--yellow); }
 
+    /* Map */
+    #map {
+      /* body is a column flex container, so pin the height against shrinking */
+      flex: 0 0 auto;
+      height: clamp(240px, 42vh, 420px);
+      width: 100%;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      z-index: 0;
+    }
+
+    .leaflet-container { font: inherit; background: var(--surface); }
+
+    /* Only the tiles are inverted; pins and the radius circle sit in other panes */
+    .leaflet-tile-pane {
+      filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.6);
+    }
+
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: var(--surface);
+      color: var(--white);
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+    }
+    .leaflet-popup-content { margin: 10px 12px; font-size: 0.76rem; line-height: 1.45; }
+    .leaflet-popup-content b { font-size: 0.84rem; }
+    .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+    .leaflet-control-attribution {
+      background: rgba(17, 17, 17, 0.8) !important;
+      color: var(--muted) !important;
+    }
+    .leaflet-control-attribution a { color: var(--dim) !important; }
+    .leaflet-bar a {
+      background: var(--surface);
+      color: var(--white);
+      border-bottom-color: var(--border);
+    }
+    .leaflet-bar a:hover { background: #262626; color: var(--white); }
+
+    /* Station pins carry the same badges as the list below */
+    .station-pin { background: none; border: none; }
+    .station-pin .pin-inner {
+      display: flex;
+      gap: 2px;
+      padding: 3px;
+      border-radius: 99px;
+      background: rgba(17, 17, 17, 0.9);
+      border: 1px solid var(--border);
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .station-pin .badge { width: 19px; height: 19px; font-size: 0.62rem; }
+    .station-pin.active .pin-inner {
+      transform: scale(1.25);
+      border-color: var(--white);
+    }
+
+    .origin-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #3b82f6;
+      border: 2px solid var(--white);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+    }
+
     /* Station list, nearest first */
     main {
       flex: 1;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      align-content: start;
+      display: flex;
+      flex-direction: column;
       gap: 1px;
       background: var(--border);
       border-bottom: 1px solid var(--border);
@@ -95,17 +161,34 @@
 
     .station {
       background: var(--bg);
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      scroll-margin-top: 12px;
     }
+    .station.active { background: #17191c; }
 
     .station-head {
       display: flex;
       align-items: center;
       gap: 11px;
       padding: 13px 18px;
-      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
       background: var(--surface);
+      cursor: pointer;
+    }
+
+    .station-dirs { display: flex; flex-direction: column; }
+
+    @media (max-width: 720px) {
+      .station { grid-template-columns: 1fr; }
+      .station-head { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+
+    /* Narrow screens: let the "showing stations near" label take its own line
+       rather than squeezing the place name down to an ellipsis */
+    @media (max-width: 480px) {
+      .place-bar { flex-wrap: wrap; justify-content: center; padding-left: 6px; }
+      .place-prefix { flex-basis: 100%; text-align: center; padding-top: 3px; }
     }
 
     .badges { display: flex; gap: 4px; flex-shrink: 0; }
@@ -358,6 +441,8 @@
   <div id="location-note"></div>
 </header>
 
+<div id="map"></div>
+
 <main id="stations"></main>
 
 <footer>
@@ -546,7 +631,7 @@
   }
 
   function renderStation(station, index) {
-    return `<section class="station">
+    return `<section class="station" id="station-${esc(station.id)}" data-id="${esc(station.id)}">
               <div class="station-head">
                 <div class="badges">${station.routes.map(route => badge(route)).join('')}</div>
                 <div>
@@ -555,13 +640,148 @@
                 </div>
                 <div class="rank">#${index + 1}</div>
               </div>
-              ${station.directions.map(renderDirection).join('')}
+              <div class="station-dirs">${station.directions.map(renderDirection).join('')}</div>
             </section>`;
   }
 
   function esc(text) {
     return String(text).replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // Map
+  const MILES_TO_METERS = 1609.34;
+  const map = {
+    instance: null,
+    circle: null,
+    origin: null,
+    pins: new Map(),      // station id -> marker
+    view: null,           // last {lat, lon, radius} the view was fitted to
+  };
+
+  function initMap() {
+    if (map.instance || typeof L === 'undefined') return;
+
+    // zoomSnap 0 allows fractional zoom, so the radius circle fills the frame
+    // instead of settling on the next zoom step down.
+    map.instance = L.map('map', { zoomControl: true, attributionControl: true, zoomSnap: 0 });
+    // Standard OSM tiles need no API key; CSS inverts them to match the board.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map.instance);
+    map.instance.setView([DEFAULT_PLACE.lat, DEFAULT_PLACE.lon], 15);
+  }
+
+  // invalidateSize only settles on the next frame, so fit after it — otherwise
+  // the fit measures a stale container and lands a zoom step out.
+  function fitToRadius() {
+    if (!map.instance || !map.circle) return;
+    map.instance.invalidateSize();
+    requestAnimationFrame(() => {
+      map.instance.fitBounds(map.circle.getBounds(), { padding: [12, 12] });
+    });
+  }
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(fitToRadius, 200);
+  });
+
+  function highlight(stationId, on) {
+    map.pins.get(stationId)?.getElement()?.classList.toggle('active', on);
+    document.getElementById(`station-${stationId}`)?.classList.toggle('active', on);
+  }
+
+  function pinPopup(station) {
+    const lines = station.directions.map(direction => {
+      const next = direction.trains[0];
+      const when = !next ? 'none scheduled'
+        : next.minutesAway <= 0 ? `${next.route} now`
+        : `${next.route} in ${next.minutesAway} min`;
+      return `${direction.code === 'N' ? '↑' : '↓'} ${esc(direction.label)}: ${esc(when)}`;
+    });
+    return `<b>${esc(station.name)}</b><br>${esc(stationMeta(station))}<br>${lines.join('<br>')}`;
+  }
+
+  function renderMap(data) {
+    initMap();
+    if (!map.instance) return;
+
+    const { lat, lon } = data.origin;
+    const radiusMeters = data.radiusMiles * MILES_TO_METERS;
+
+    if (map.origin) map.origin.setLatLng([lat, lon]);
+    else {
+      map.origin = L.marker([lat, lon], {
+        icon: L.divIcon({ className: '', html: '<div class="origin-dot"></div>', iconSize: [14, 14] }),
+        interactive: false,
+      }).addTo(map.instance);
+    }
+
+    if (map.circle) map.circle.setLatLng([lat, lon]).setRadius(radiusMeters);
+    else {
+      map.circle = L.circle([lat, lon], {
+        radius: radiusMeters,
+        color: '#3b82f6',
+        weight: 1,
+        fillColor: '#3b82f6',
+        fillOpacity: 0.07,
+      }).addTo(map.instance);
+    }
+
+    // Reuse pins across refreshes so the map doesn't flicker every 15s.
+    const seen = new Set();
+    for (const station of data.stations) {
+      seen.add(station.id);
+      const badges = station.routes.map(route => badge(route)).join('');
+      let pin = map.pins.get(station.id);
+      if (!pin) {
+        pin = L.marker([station.lat, station.lon], {
+          icon: L.divIcon({
+            className: 'station-pin',
+            html: `<div class="pin-inner">${badges}</div>`,
+            iconSize: null,
+          }),
+        }).addTo(map.instance);
+        pin.on('click', () => {
+          document.getElementById(`station-${station.id}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        pin.on('mouseover', () => highlight(station.id, true));
+        pin.on('mouseout', () => highlight(station.id, false));
+        map.pins.set(station.id, pin);
+      }
+      pin.bindPopup(pinPopup(station));
+    }
+
+    for (const [id, pin] of map.pins) {
+      if (seen.has(id)) continue;
+      pin.remove();
+      map.pins.delete(id);
+    }
+
+    // Only refit when the place or radius actually changed, so panning sticks.
+    const view = `${lat},${lon},${data.radiusMiles}`;
+    if (map.view !== view) {
+      map.view = view;
+      fitToRadius();
+    }
+  }
+
+  function wireCardHighlights() {
+    document.querySelectorAll('.station').forEach(card => {
+      const id = card.dataset.id;
+      card.querySelector('.station-head').addEventListener('click', () => {
+        const pin = map.pins.get(id);
+        if (!pin) return;
+        map.instance.panTo(pin.getLatLng());
+        pin.openPopup();
+      });
+      card.addEventListener('mouseenter', () => highlight(id, true));
+      card.addEventListener('mouseleave', () => highlight(id, false));
+    });
   }
 
   // Data fetch — only the trains refresh; the place stays where it was set.
@@ -584,6 +804,8 @@
       $('stations').innerHTML = data.stations.length
         ? data.stations.map(renderStation).join('')
         : '<section class="station"><div class="dir-section"><span class="empty">No stations found</span></div></section>';
+      wireCardHighlights();
+      renderMap(data);
       renderPlace(data);
 
       dot.className = 'dot ok';

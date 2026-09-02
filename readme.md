@@ -1,6 +1,8 @@
 # MaujerDash
 
-A small live subway dashboard. The dark-themed single-page dashboard (`home.html`) lists the nearest subway stations — closest first — with upcoming arrivals in each direction. An Express server reads the MTA GTFS-realtime feeds on demand and caches each feed for 15 seconds.
+A small live subway dashboard. The dark-themed single page (`home.html`) shows a map of the search radius around you with the nearby stations pinned on it, and below the map lists those stations — closest first — with upcoming arrivals in each direction. Hovering a station highlights its pin; clicking a pin jumps to its row. An Express server reads the MTA GTFS-realtime feeds on demand and caches each feed for 15 seconds.
+
+The map is [Leaflet](https://leafletjs.com/), installed as a dependency and served from `node_modules` at `/vendor/leaflet` rather than from a CDN. Tiles come from OpenStreetMap's public tile servers (no API key, attribution shown on the map) and are inverted in CSS to match the dark theme; that and the geocoder below are the only external requests the page makes.
 
 ## Setting the location
 

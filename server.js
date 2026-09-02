@@ -331,6 +331,10 @@ app.get('/api/debug/stops', async (req, res) => {
   }
 });
 
+// Leaflet is served from node_modules rather than a CDN, so the only external
+// requests the page makes are for map tiles.
+app.use('/vendor/leaflet', express.static(path.join(__dirname, 'node_modules/leaflet/dist')));
+
 app.use(express.static(__dirname, { index: 'home.html' }));
 
 app.listen(PORT, () => {
