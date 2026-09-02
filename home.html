@@ -378,6 +378,19 @@
       text-align: center;
     }
 
+    .focus-now {
+      position: absolute;
+      top: 16px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+    }
+
     .focus-label {
       font-size: 0.72rem;
       font-weight: 700;
@@ -385,6 +398,20 @@
       text-transform: uppercase;
       color: var(--muted);
     }
+
+    .focus-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      max-width: 620px;
+      font-size: 1rem;
+      line-height: 1.5;
+      color: var(--dim);
+    }
+    .focus-line b { color: var(--white); font-weight: 700; }
+    .focus-line .badge { width: 24px; height: 24px; font-size: 0.78rem; }
 
     .focus-timer {
       font-size: clamp(3.5rem, 17vw, 11rem);
@@ -604,9 +631,10 @@
 </footer>
 
 <div id="focus" hidden>
+  <div class="focus-now" id="focus-now"></div>
   <div class="focus-label" id="focus-label">Leave in</div>
   <div class="focus-timer" id="focus-timer">--:--</div>
-  <div class="focus-train" id="focus-train"></div>
+  <div class="focus-line" id="focus-line"></div>
   <div class="focus-sub" id="focus-sub"></div>
   <div class="focus-modes" id="focus-modes"></div>
   <div id="focus-map"></div>
@@ -677,10 +705,13 @@
   // Clock
   function tick() {
     const now = new Date();
+    const time = now.toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', second: '2-digit',
+    });
     $('clock').textContent =
       now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) +
-      ' · ' +
-      now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      ' · ' + time;
+    $('focus-now').textContent = time;
   }
   tick();
   setInterval(tick, 1000);
@@ -1213,12 +1244,19 @@
       timer.textContent = clock(untilLeave);
     }
 
+    // Reads as one sentence around the big number: "Leave in 7:29 to arrive at
+    // Grand St to catch the L train to 8 Av".
+    const stationName = esc(station?.name ?? '');
+    const routeBadge = badge(session.route, session.express);
+    const towards = session.destination ? ` to ${esc(session.destination)}` : '';
+    $('focus-line').innerHTML = untilTrain <= 0
+      ? `<span>the ${routeBadge} train${towards} has left <b>${stationName}</b></span>`
+      : `<span>to arrive at <b>${stationName}</b> to catch the</span>` +
+        `${routeBadge}<span>train${towards}</span>`;
+
     const arrival = new Date(session.arrivalTime * 1000);
-    $('focus-train').innerHTML =
-      `${badge(session.route, session.express)}<span>${esc(station?.name ?? '')}</span>`;
-    $('focus-sub').textContent = session.destination
-      ? `to ${session.destination} · arrives ${arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-      : `arrives ${arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    const arrivalClock = arrival.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    $('focus-sub').textContent = `Train arrives ${arrivalClock}`;
     $('focus-math').textContent =
       `${travel} min ${MODE_PHRASE[mode]} + ${LEAVE_BUFFER_MIN} min to the platform` +
       ` · train in ${clock(Math.max(0, untilTrain))}`;
