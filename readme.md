@@ -66,6 +66,36 @@ To use a different port:
 PORT=4000 npm start
 ```
 
+## Running on a Raspberry Pi
+
+Docker Compose builds and runs it as a service. From the project directory on the Pi:
+
+```sh
+docker compose up -d --build
+```
+
+That serves the dashboard on port 8080. Copy `.env.example` to `.env` to change `HOST_PORT` or `TZ`. Useful follow-ups:
+
+```sh
+docker compose logs -f      # follow the log
+docker compose ps           # state, including the healthcheck
+docker compose down         # stop and remove
+docker compose up -d --build   # redeploy after a git pull
+```
+
+Notes for a Pi specifically:
+
+- `node:20-alpine` is multi-arch, so the same Dockerfile builds on 64-bit Pi OS (arm64) and 32-bit (arm/v7). The first build is the slow part — it compiles nothing, but `npm ci` on an SD card takes a few minutes. Later builds reuse that layer unless `package.json` or `package-lock.json` changed.
+- Logs are capped at 3 × 10 MB. Unbounded container logs will fill an SD card eventually.
+- The healthcheck hits `/healthz`, which touches nothing external, so an MTA or OSRM outage shows up in the UI rather than restarting the container.
+- The container runs as the unprivileged `node` user and stores nothing — all caches are in memory, so there are no volumes to back up. To reset everything, restart it.
+
+### Geolocation over the LAN
+
+Browsers only expose location over https or on `localhost`. Reaching the Pi at `http://raspberrypi.local:8080` from a phone means **"Use my location" will not work** — the dashboard falls back to Maujer St, and you set the location with the search box instead (it is saved, so this is a one-time step per device).
+
+If you want the location button to work off the Pi, the page has to be served over https — a reverse proxy such as Caddy with a real certificate, or a mesh network like Tailscale, are the usual routes.
+
 Note that browsers only expose geolocation over https or on `localhost`. Reaching the dashboard over plain http at a LAN address will silently fall back to Maujer St.
 
 ## API
