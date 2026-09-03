@@ -297,6 +297,16 @@ app.use((_, res, next) => {
   next();
 });
 
+// Liveness for the container healthcheck. Deliberately touches nothing
+// external, so a flaky MTA or OSRM never restarts the app.
+app.get('/healthz', (_req, res) => {
+  res.json({
+    status: 'ok',
+    stations: STATIONS.length,
+    uptimeSeconds: Math.round(process.uptime()),
+  });
+});
+
 app.get('/api/nearby', nearby);
 app.get('/api/trains', nearby); // legacy path, same payload
 

@@ -1,0 +1,31 @@
+services:
+  maujerdash:
+    build: .
+    image: maujerdash:latest
+    container_name: maujerdash
+    restart: unless-stopped
+
+    # Host port is configurable; the container always listens on 3000.
+    ports:
+      - "${HOST_PORT:-8080}:3000"
+
+    environment:
+      # Only affects log timestamps — the dashboard clock is the browser's, and
+      # weather times come back already localised to the searched place.
+      TZ: ${TZ:-America/New_York}
+
+    # /healthz touches nothing external, so a flaky MTA or OSRM feed does not
+    # get the container restarted underneath you.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    # A Pi boots off an SD card; unbounded logs will eventually eat it.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
