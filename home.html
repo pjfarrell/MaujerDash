@@ -699,6 +699,129 @@
       margin-bottom: 2px;
     }
     .results .empty { padding: 6px 2px; }
+
+    /* Leaving checklist */
+    .badge-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 99px;
+      background: var(--yellow);
+      color: #111;
+      font-size: 0.6rem;
+      font-weight: 800;
+      margin-left: 5px;
+    }
+
+    .checklist-panel {
+      max-width: 480px;
+      margin: 12px auto 0;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      text-align: left;
+    }
+
+    .checklist-panel h2 {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    #check-form { display: flex; gap: 6px; margin-bottom: 10px; }
+    #check-input { flex: 1; min-width: 0; border-radius: 8px; padding: 7px 12px; background: var(--bg); }
+    #check-input::placeholder { color: var(--muted); }
+
+    .check-list { display: flex; flex-direction: column; gap: 1px; }
+
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 6px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .check-item:hover { background: rgba(240, 240, 240, 0.04); }
+    .check-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      border-radius: 4px;
+      flex-shrink: 0;
+      accent-color: var(--green);
+      cursor: pointer;
+    }
+    .check-item span { flex: 1; word-break: break-word; }
+    .check-item.done span { color: var(--muted); text-decoration: line-through; }
+    .check-item button {
+      padding: 2px 9px;
+      border-radius: 99px;
+      font-size: 0.72rem;
+      flex-shrink: 0;
+    }
+
+    .check-empty { color: var(--muted); font-size: 0.78rem; font-style: italic; padding: 6px 2px; }
+
+    /* Surfaced again right when it matters: the moment you're about to walk out.
+       Chips rather than a sentence — a long list stays scannable, and each one
+       can be ticked off without leaving the countdown. */
+    .focus-checklist {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      max-width: 620px;
+    }
+
+    .focus-checklist .grab-label {
+      font-size: 0.64rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-right: 2px;
+    }
+
+    .focus-checklist button {
+      padding: 5px 13px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--yellow);
+      background: rgba(245, 166, 35, 0.1);
+      border-color: rgba(245, 166, 35, 0.4);
+      transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+    }
+    .focus-checklist button:hover {
+      color: #111;
+      background: var(--yellow);
+      border-color: var(--yellow);
+    }
+    .focus-checklist button:hover::after { content: ' ✓'; }
+
+    /* Grabbed items stay on the row — the whole list remains visible, and green
+       against yellow says at a glance how much is still outstanding. */
+    .focus-checklist button.grabbed {
+      color: var(--green);
+      background: rgba(108, 190, 69, 0.12);
+      border-color: rgba(108, 190, 69, 0.45);
+    }
+    .focus-checklist button.grabbed::before { content: '✓ '; }
+    .focus-checklist button.grabbed:hover {
+      color: #111;
+      background: var(--green);
+      border-color: var(--green);
+    }
+    .focus-checklist button.grabbed:hover::after { content: ''; }
   </style>
 </head>
 <body>
@@ -729,6 +852,19 @@
       <option value="1">Within 1 mi</option>
       <option value="2">Within 2 mi</option>
     </select>
+    <button id="checklist-toggle" aria-expanded="false" title="Things to grab before you leave">
+      Checklist<span class="badge-count" id="check-badge" hidden></span>
+    </button>
+  </div>
+
+  <div class="checklist-panel" id="checklist-panel" hidden>
+    <h2>Before you leave</h2>
+    <form id="check-form">
+      <input id="check-input" type="text" autocomplete="off"
+             placeholder="Add something to grab&hellip;" aria-label="New checklist item">
+      <button type="submit">Add</button>
+    </form>
+    <div class="check-list" id="check-list"></div>
   </div>
 
   <div class="picker" id="picker" hidden>
@@ -766,6 +902,7 @@
   <div class="focus-timer" id="focus-timer">--:--</div>
   <div class="focus-line" id="focus-line"></div>
   <div class="focus-sub" id="focus-sub"></div>
+  <div class="focus-checklist" id="focus-checklist" hidden></div>
   <div class="focus-modes" id="focus-modes"></div>
   <div id="focus-map"></div>
   <div class="focus-note" id="focus-note"></div>
@@ -791,6 +928,7 @@
 
   const REFRESH_MS = 15_000;
   const PLACE_KEY = 'maujerdash:place';
+  const CHECKLIST_KEY = 'maujerdash:checklist';
 
   // The app's namesake, shown until someone picks a location of their own.
   const DEFAULT_PLACE = {
@@ -807,6 +945,7 @@
     session: null,     // train being counted down to
     weather: null,     // current conditions at the chosen place
     mode: loadMode(),  // how you plan to reach the station
+    checklist: loadChecklist(),  // things to grab before leaving
   };
 
   function loadMode() {
@@ -826,6 +965,90 @@
     for (const button of $('modes').querySelectorAll('button')) {
       button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode));
     }
+  }
+
+  // --- Leaving checklist -----------------------------------------
+  function loadChecklist() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHECKLIST_KEY));
+      return Array.isArray(saved) ? saved.filter(i => i && typeof i.text === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveChecklist() {
+    try { localStorage.setItem(CHECKLIST_KEY, JSON.stringify(state.checklist)); } catch {}
+  }
+
+  let checklistSeq = 0;
+  const nextCheckId = () => `c${Date.now()}-${checklistSeq++}`;
+
+  function addChecklistItem(text) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    state.checklist.push({ id: nextCheckId(), text: trimmed, checked: false });
+    saveChecklist();
+    renderChecklist();
+  }
+
+  function toggleChecklistItem(id) {
+    const item = state.checklist.find(i => i.id === id);
+    if (!item) return;
+    item.checked = !item.checked;
+    saveChecklist();
+    renderChecklist();
+  }
+
+  function removeChecklistItem(id) {
+    state.checklist = state.checklist.filter(i => i.id !== id);
+    saveChecklist();
+    renderChecklist();
+  }
+
+  function renderChecklist() {
+    const items = state.checklist;
+    const remaining = items.filter(i => !i.checked).length;
+
+    const badge = $('check-badge');
+    badge.textContent = remaining;
+    badge.hidden = remaining === 0;
+
+    $('check-list').innerHTML = items.length
+      ? items.map(item => `
+          <label class="check-item${item.checked ? ' done' : ''}">
+            <input type="checkbox" data-id="${esc(item.id)}" ${item.checked ? 'checked' : ''}>
+            <span>${esc(item.text)}</span>
+            <button type="button" data-remove="${esc(item.id)}" title="Remove">&times;</button>
+          </label>`).join('')
+      : `<div class="check-empty">Nothing on the list yet — add what you don't want to forget</div>`;
+
+    renderFocusChecklist();
+  }
+
+  function toggleChecklistPanel() {
+    const panel = $('checklist-panel');
+    const open = panel.hidden;
+    panel.hidden = !open;
+    $('checklist-toggle').setAttribute('aria-expanded', String(open));
+    if (open) $('check-input').focus({ preventScroll: true });
+  }
+
+  // The reminder that matters most right when you're about to walk out. Each
+  // chip is tappable, so things get ticked off without leaving the countdown.
+  function renderFocusChecklist() {
+    const el = $('focus-checklist');
+    const items = state.checklist;
+
+    el.hidden = !items.length;
+    if (el.hidden) return;
+
+    el.innerHTML = `<span class="grab-label">Grab</span>` +
+      items.map(item =>
+        `<button type="button" data-grab="${esc(item.id)}"
+                 class="${item.checked ? 'grabbed' : ''}"
+                 title="${item.checked ? 'Grabbed — tap to undo' : 'Tap once you have it'}"
+                 >${esc(item.text)}</button>`).join('');
   }
 
   const $ = id => document.getElementById(id);
@@ -1667,6 +1890,26 @@
   });
 
   $('weather').addEventListener('click', toggleForecast);
+
+  renderChecklist();
+  $('checklist-toggle').addEventListener('click', toggleChecklistPanel);
+  $('check-form').addEventListener('submit', event => {
+    event.preventDefault();
+    addChecklistItem($('check-input').value);
+    $('check-input').value = '';
+  });
+  $('check-list').addEventListener('change', event => {
+    const box = event.target.closest('input[type="checkbox"]');
+    if (box) toggleChecklistItem(box.dataset.id);
+  });
+  $('check-list').addEventListener('click', event => {
+    const button = event.target.closest('button[data-remove]');
+    if (button) removeChecklistItem(button.dataset.remove);
+  });
+  $('focus-checklist').addEventListener('click', event => {
+    const chip = event.target.closest('button[data-grab]');
+    if (chip) toggleChecklistItem(chip.dataset.grab);
+  });
 
   $('focus-exit').addEventListener('click', endSession);
   $('focus-modes').addEventListener('click', event => {
