@@ -107,7 +107,7 @@
 
     .wx-hour {
       flex: 0 0 auto;
-      width: 46px;
+      width: 44px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -116,7 +116,8 @@
       border-radius: 8px;
       font-variant-numeric: tabular-nums;
     }
-    .wx-hour.now { background: rgba(240, 240, 240, 0.08); }
+    /* Now leads the strip, set apart from the hours that follow it. */
+    .wx-hour.now { background: rgba(240, 240, 240, 0.08); margin-right: 8px; }
     .wx-hour.now .wx-label { color: var(--white); font-weight: 700; }
 
     .wx-temp-h { font-size: 0.72rem; font-weight: 700; color: var(--white); line-height: 1.2; }
@@ -831,7 +832,7 @@
   <div class="meta">
     <span id="clock"></span>
     <button id="weather" class="weather" hidden aria-expanded="false"
-            title="Show today's forecast"></button>
+            title="Show the next 12 hours"></button>
   </div>
 
   <div class="wx-panel" id="wx-panel" hidden></div>
@@ -1276,20 +1277,33 @@
       el.textContent = text;
       el.hidden = !weather;
     }
-    $('weather').title = weather ? `${detail} — click for today's forecast` : '';
+    $('weather').title = weather ? `${detail} — click for the next 12 hours` : '';
     $('focus-weather').title = detail;
 
     if (!weather) $('wx-panel').hidden = true;
     else if (!$('wx-panel').hidden) renderForecast();
   }
 
-  // The day's hours as a strip: bar height maps the temperature across the
-  // day's own range, so a flat day reads flat rather than exaggerated.
+  // The strip starts where the viewer is: now on the far left, then the next
+  // 12 hours to its right. Bar height maps the temperature across the strip's
+  // own range, so a flat stretch reads flat rather than exaggerated.
   function renderForecast() {
     const weather = state.weather;
-    if (!weather?.hourly?.length) return;
+    if (!weather) return;
 
-    const temps = weather.hourly.map(h => h.temperature);
+    const hours = [
+      {
+        label: 'Now',
+        temperature: weather.temperature,
+        precipChance: weather.precipChance ?? 0,
+        description: weather.description,
+        icon: weather.icon,
+        isNow: true,
+      },
+      ...(weather.hourly ?? []),
+    ];
+
+    const temps = hours.map(h => h.temperature);
     const low = Math.min(...temps);
     const high = Math.max(...temps);
     // Percentage of the track: equal temperatures give equal bars, and only a
@@ -1305,7 +1319,7 @@
         <span class="muted">Sunrise ${esc(weather.today.sunrise ?? '—')} ·
           Sunset ${esc(weather.today.sunset ?? '—')}</span>
       </div>
-      <div class="wx-hours">${weather.hourly.map(hour => `
+      <div class="wx-hours">${hours.map(hour => `
         <div class="wx-hour${hour.isNow ? ' now' : ''}"
              title="${esc(`${hour.label} · ${hour.description} · ${hour.precipChance}% chance of rain`)}">
           <span class="wx-temp-h">${hour.temperature}°</span>
@@ -1316,9 +1330,6 @@
           <span class="wx-precip">${hour.precipChance > 0
             ? `<span class="wx-drop">💧</span>${hour.precipChance}%` : ''}</span>
         </div>`).join('')}</div>`;
-
-    $('wx-panel').querySelector('.wx-hour.now')
-      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 
   function toggleForecast() {

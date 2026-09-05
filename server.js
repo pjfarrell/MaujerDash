@@ -347,6 +347,8 @@ app.get('/api/route', async (req, res) => {
 // Open-Meteo needs no API key. Conditions come back as WMO codes.
 const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast';
 const WEATHER_TTL = 10 * 60_000;
+// How far ahead the forecast strip looks, past the current hour.
+const FORECAST_HOURS = 12;
 const weatherCache = new Map();
 
 const WMO = {
@@ -389,7 +391,8 @@ app.get('/api/weather', async (req, res) => {
     current: 'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,is_day',
     hourly: 'temperature_2m,weather_code,precipitation_probability,is_day',
     daily: 'temperature_2m_max,temperature_2m_min,sunrise,sunset',
-    forecast_days: '1',
+    // Two days so the next 12 hours stay available across midnight.
+    forecast_days: '2',
     temperature_unit: 'fahrenheit',
     wind_speed_unit: 'mph',
     precipitation_unit: 'inch',
@@ -411,21 +414,29 @@ app.get('/api/weather', async (req, res) => {
     };
     const current = conditions(now.weather_code, isDay);
 
-    const hourly = (body.hourly?.time ?? []).map((time, i) => ({
+    const allHours = (body.hourly?.time ?? []).map((time, i) => ({
       time,
       label: hourLabel(time),
       temperature: Math.round(body.hourly.temperature_2m[i]),
       precipChance: body.hourly.precipitation_probability?.[i] ?? 0,
-      // Same hour as the current observation, in the location's own timezone.
-      isNow: time.slice(0, 13) === now.time.slice(0, 13),
       ...conditions(body.hourly.weather_code[i], body.hourly.is_day?.[i] === 1),
     }));
+
+    // The strip leads with the current conditions, so hand back only what comes
+    // after the current hour. Hours are the location's own wall clock, matched
+    // by string rather than Date so the server's timezone stays out of it.
+    const nowIndex = allHours.findIndex(hour => hour.time.slice(0, 13) === now.time.slice(0, 13));
+    const start = nowIndex >= 0
+      ? nowIndex + 1
+      : Math.max(allHours.findIndex(hour => hour.time > now.time), 0);
+    const hourly = allHours.slice(start, start + FORECAST_HOURS);
 
     const daily = body.daily ?? {};
     const value = {
       temperature: Math.round(now.temperature_2m),
       feelsLike: Math.round(now.apparent_temperature),
       precipitation: now.precipitation,
+      precipChance: nowIndex >= 0 ? allHours[nowIndex].precipChance : 0,
       windMph: Math.round(now.wind_speed_10m),
       description: current.description,
       icon: current.icon,
