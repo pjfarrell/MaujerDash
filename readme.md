@@ -23,7 +23,7 @@ Travel times come from the public [OSRM](https://project-osrm.org/) demo server,
 
 If OSRM is unreachable the app falls back to straight-line distance padded by 30% for the street grid, and flags it as `estimated` in the API and in the row's tooltip.
 
-Current conditions for the chosen location sit next to the clock in the header and at the top of a focus session. Clicking the header reading opens a forecast widget for the whole day: current conditions, today's high and low, wind, sunrise and sunset, and all 24 hours as a scrollable strip — temperature, a bar scaled to the day's own range, conditions and chance of rain, with the current hour highlighted and scrolled into view.
+Current conditions for the chosen location sit next to the clock in the header and at the top of a focus session. Clicking the header reading opens a forecast widget: current conditions, today's high and low, wind, sunrise and sunset, and a strip that leads with now on the far left and runs through the next 12 hours — temperature, a bar scaled to the strip's own range, conditions and chance of rain. The strip crosses midnight, so late in the evening it runs into tomorrow morning.
 
 Data is [Open-Meteo](https://open-meteo.com/) (no API key), cached for 10 minutes and refreshed when the location moves. `GET /api/weather?lat=&lon=` returns it. If it fails the app hides the weather rather than breaking the board.
 
