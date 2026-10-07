@@ -147,9 +147,31 @@ button.weather {
 }
 button.weather:hover { color: var(--white); }
 
-.dash-link { color: var(--dim); text-decoration: none; white-space: nowrap; }
-.dash-link:hover { color: var(--white); }
-.dash-link[aria-current='page'] { color: var(--white); cursor: default; }
+/* A real button, matching the pill controls on the board. Still an anchor, so
+   it navigates, opens in a new tab and works without JavaScript. */
+.dash-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+  color: var(--dim);
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+.dash-link:hover { color: var(--white); border-color: #444; }
+
+/* On the dashboard itself it reads as the selected pill, like the mode buttons. */
+.dash-link[aria-current='page'] {
+  background: var(--white);
+  color: #111;
+  border-color: var(--white);
+  cursor: default;
+}
 
 /* Keeping the row on one line matters more than the wording around it, so the
    date and the "showing stations near" prefix go first; the place itself, the
