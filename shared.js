@@ -1,4 +1,5 @@
-// Shared by the board (/) and the sessions dashboard (/dashboard).
+// Shared by the board (/) and the sessions dashboard (/dashboard). An ES
+// module: pages import what they use, and everything else stays private.
 
 // Official line colors, so a station's badges read the way the signage does.
 const ROUTE_COLORS = {
@@ -15,33 +16,33 @@ const ROUTE_COLORS = {
 };
 const DARK_TEXT = new Set(['N', 'Q', 'R', 'W', 'L', 'S']);
 
-function esc(text) {
+export function esc(text) {
   return String(text).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function badge(route, express) {
+export function badge(route, express) {
   const color = ROUTE_COLORS[route] || '#808183';
   const text = DARK_TEXT.has(route) ? '#000' : '#fff';
   return `<span class="badge${express ? ' express' : ''}" style="background:${color};color:${text}">` +
          `<span>${esc(route)}</span></span>`;
 }
 
-function clock(ms) {
+export function clock(ms) {
   const total = Math.max(0, Math.round(ms / 1000));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
 // --- Chosen place --------------------------------------------
 // The board owns this; other pages read it so their header agrees.
-const PLACE_KEY = 'maujerdash:place';
+export const PLACE_KEY = 'maujerdash:place';
 
 // The app's namesake, shown until someone picks a location of their own.
-const DEFAULT_PLACE = {
+export const DEFAULT_PLACE = {
   lat: 40.7118, lon: -73.943, label: 'Maujer St, Brooklyn', source: 'default',
 };
 
-function loadPlace() {
+export function loadPlace() {
   try {
     const saved = JSON.parse(localStorage.getItem(PLACE_KEY));
     return Number.isFinite(saved?.lat) && Number.isFinite(saved?.lon) ? saved : null;
@@ -57,7 +58,7 @@ function loadPlace() {
 const SESSION_KEY = 'maujerdash:session';
 const HEARTBEAT_MS = 15_000;
 
-function loadSavedSession() {
+export function loadSavedSession() {
   try {
     const saved = JSON.parse(localStorage.getItem(SESSION_KEY));
     if (!saved || !Number.isFinite(saved.arrivalTime) || !saved.stationId) return null;
@@ -68,14 +69,14 @@ function loadSavedSession() {
   }
 }
 
-function saveSession(session) {
+export function saveSession(session) {
   try {
     if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     else localStorage.removeItem(SESSION_KEY);
   } catch { /* it still works for this page, just not the next one */ }
 }
 
-async function postSession(session) {
+export async function postSession(session) {
   if (!session) return;
   try {
     await fetch('/api/sessions', {
@@ -88,14 +89,14 @@ async function postSession(session) {
   }
 }
 
-async function deleteSession() {
+export async function deleteSession() {
   try {
     await fetch(`/api/sessions/${encodeURIComponent(deviceId())}`, { method: 'DELETE' });
   } catch { /* it will age out on the server anyway */ }
 }
 
 // Re-reads storage every beat, so ending a session in another tab stops it here.
-function startHeartbeat() {
+export function startHeartbeat() {
   return setInterval(() => postSession(loadSavedSession()), HEARTBEAT_MS);
 }
 
@@ -127,7 +128,7 @@ function autoName(id) {
 
 let cachedDeviceId = null;
 
-function deviceId() {
+export function deviceId() {
   if (cachedDeviceId) return cachedDeviceId;
 
   let id = null;
@@ -148,7 +149,7 @@ function deviceId() {
   return id;
 }
 
-function displayName() {
+export function displayName() {
   try {
     const saved = localStorage.getItem(NAME_KEY);
     if (saved && saved.trim()) return saved.trim().slice(0, 32);
@@ -157,7 +158,7 @@ function displayName() {
 }
 
 // An empty name clears the override and falls back to the derived one.
-function setDisplayName(name) {
+export function setDisplayName(name) {
   const trimmed = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, 32);
   try {
     if (trimmed) localStorage.setItem(NAME_KEY, trimmed);
