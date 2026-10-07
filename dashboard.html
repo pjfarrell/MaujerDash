@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Focus Sessions</title>
   <link rel="stylesheet" href="/shared.css">
-  <script src="/shared.js"></script>
   <style>
     header {
       padding: 18px 20px 14px;
@@ -245,7 +244,12 @@
   <span id="status">Connecting&hellip;</span>
 </footer>
 
-<script>
+<script type="module">
+  import {
+    esc, badge, clock, DEFAULT_PLACE, loadPlace,
+    loadSavedSession, postSession, startHeartbeat, deviceId,
+  } from '/shared.js';
+
   const MODE_PHRASE = { walk: 'on foot', bike: 'by bike', drive: 'by car' };
   const $ = id => document.getElementById(id);
 
