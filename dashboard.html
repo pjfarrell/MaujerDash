@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Focus Sessions</title>
+  <link rel="stylesheet" href="/shared.css">
+  <script src="/shared.js"></script>
+  <style>
+    header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: clamp(1rem, 3.5vw, 1.4rem);
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    header { text-align: center; }
+
+    .meta {
+      margin-top: 4px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+
+    /* Sessions are bubbles: one big one on its own, shrinking to a row of
+       equal circles as others join. */
+    main {
+      flex: 1;
+      padding: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-content: center;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .bubble {
+      width: clamp(215px, 26vw, 290px);
+      aspect-ratio: 1;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 11%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 4px;
+      overflow: hidden;
+      transition: width 0.4s ease;
+    }
+    /* Your own session, so you can pick it out on a shared screen */
+    .bubble.mine { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
+
+    main.solo .bubble { width: clamp(300px, 56vmin, 460px); }
+
+    .who {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+    .who .name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      transition: font-size 0.4s ease;
+    }
+    main.solo .who .name { font-size: 1.3rem; }
+
+    .who .tag {
+      font-size: 0.54rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #3b82f6;
+      font-weight: 700;
+    }
+
+    .label {
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* The urgency colour lives here; the clock and the sand both inherit it. */
+    .time-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      color: var(--green);
+      transition: color 0.6s;
+    }
+    .time-row.soon { color: var(--yellow); }
+    .time-row.go   { color: var(--red); }
+    .time-row.gone { color: var(--muted); }
+
+    .countdown {
+      font-size: clamp(2rem, 6vw, 2.9rem);
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      color: currentColor;
+      transition: font-size 0.4s ease;
+    }
+    main.solo .countdown { font-size: clamp(3.2rem, 11vmin, 5rem); }
+
+    .time-row.go .countdown { animation: pulse 1.4s ease-in-out infinite; }
+    .time-row.gone .countdown { font-size: 0.95rem; }
+    main.solo .time-row.gone .countdown { font-size: 1.4rem; }
+
+    @keyframes pulse { 50% { opacity: 0.45; } }
+
+    /* Hourglass: the sand level tracks how much of the session has run. */
+    .glass {
+      width: 23px;
+      height: 35px;
+      flex: 0 0 auto;
+      overflow: visible;
+      transition: width 0.4s ease, height 0.4s ease;
+    }
+    main.solo .glass { width: 38px; height: 58px; }
+
+    .glass .frame {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linejoin: round;
+      opacity: 0.45;
+    }
+    .glass .sand { fill: currentColor; }
+    .glass .stream {
+      fill: currentColor;
+      animation: grain 0.9s linear infinite;
+    }
+    .time-row.gone .glass .stream { display: none; }
+
+    @keyframes grain {
+      0%   { opacity: 0.15; }
+      45%  { opacity: 1; }
+      100% { opacity: 0.15; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .time-row.go .countdown { animation: none; }
+      .glass .stream { animation: none; opacity: 0.8; }
+    }
+
+    .trip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      font-size: 0.82rem;
+      line-height: 1.3;
+      color: var(--dim);
+      min-width: 0;
+    }
+    .trip b { color: var(--white); }
+    .trip .badge { width: 20px; height: 20px; font-size: 0.66rem; }
+    main.solo .trip { font-size: 1.05rem; }
+    main.solo .trip .badge { width: 24px; height: 24px; font-size: 0.76rem; }
+
+    /* Too much for a small bubble; the big one has room for it. */
+    .detail {
+      display: none;
+      font-size: 0.72rem;
+      line-height: 1.35;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    main.solo .detail { display: block; }
+
+    main:not(.solo) .dest { display: none; }
+
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+      font-size: 0.86rem;
+      text-align: center;
+    }
+
+    footer {
+      padding: 9px 24px;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      border-top: 1px solid var(--border);
+    }
+
+    .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-right: 6px;
+      background: var(--muted);
+      vertical-align: middle;
+      transition: background 0.4s;
+    }
+    .dot.ok  { background: var(--green); }
+    .dot.err { background: var(--red); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <h1><a class="brand" href="/">Nearby Trains</a></h1>
+    <span class="place-bar">
+      <span class="place-prefix">Showing stations near</span>
+      <span class="place-label" id="place-label"></span>
+    </span>
+    <span class="bar-right">
+      <span id="clock" class="bar-clock"></span>
+      <span id="weather" class="weather" hidden></span>
+      <a class="dash-link" href="/dashboard" aria-current="page">Dashboard</a>
+    </span>
+  </div>
+  <div class="page-title">Focus Sessions</div>
+  <div class="meta"><span id="count">no one heading out</span></div>
+</header>
+
+<main id="cards"></main>
+
+<footer>
+  <span class="dot" id="dot"></span>
+  <span id="status">Connecting&hellip;</span>
+</footer>
+
+<script>
+  const MODE_PHRASE = { walk: 'on foot', bike: 'by bike', drive: 'by car' };
+  const $ = id => document.getElementById(id);
+
+  // Hourglass geometry, in the SVG's own 24x36 space.
+  const TOP_Y = 3, NECK_Y = 17.4, BOWL_Y = 18.6, BASE_Y = 33;
+
+  const me = deviceId();
+  const cards = new Map();   // deviceId -> refs
+  let sessions = [];
+
+  function countdownFor(session) {
+    const untilLeave = session.leaveAt - Date.now();
+    const untilTrain = session.arrivalTime * 1000 - Date.now();
+
+    if (untilTrain <= 0) return { cls: 'gone', label: 'Departed', text: 'Train has gone', run: 1 };
+    if (untilLeave <= 0) return { cls: 'go', label: 'Leave', text: 'NOW', run: 1 };
+
+    // How much of this session has elapsed, start to deadline.
+    const span = Math.max(session.leaveAt - session.startedAt, 60_000);
+    const run = Math.min(1, Math.max(0, (Date.now() - session.startedAt) / span));
+    return { cls: untilLeave <= 120_000 ? 'soon' : '', label: 'Leave in', text: clock(untilLeave), run };
+  }
+
+  function buildCard(session) {
+    const el = document.createElement('section');
+    el.className = 'bubble';
+    el.dataset.id = session.deviceId;
+
+    // Clip ids must be unique per card; device ids are already [A-Za-z0-9_-].
+    const topId = `t-${session.deviceId}`;
+    const botId = `b-${session.deviceId}`;
+
+    el.innerHTML = `
+      <div class="who">
+        <span class="name"></span>
+        <span class="tag" hidden>you</span>
+      </div>
+      <div>
+        <div class="label"></div>
+        <div class="time-row">
+          <span class="countdown"></span>
+          <svg class="glass" viewBox="0 0 24 36" aria-hidden="true">
+            <defs>
+              <clipPath id="${topId}"><rect class="top-clip" x="0" width="24" y="${TOP_Y}" height="0"/></clipPath>
+              <clipPath id="${botId}"><rect class="bot-clip" x="0" width="24" y="${BASE_Y}" height="0"/></clipPath>
+            </defs>
+            <polygon class="sand" clip-path="url(#${topId})" points="4,${TOP_Y} 20,${TOP_Y} 12,${NECK_Y}"/>
+            <polygon class="sand" clip-path="url(#${botId})" points="12,${BOWL_Y} 20,${BASE_Y} 4,${BASE_Y}"/>
+            <rect class="stream" x="11.4" y="${NECK_Y}" width="1.2" height="${BASE_Y - NECK_Y}"/>
+            <path class="frame" d="M4 ${TOP_Y} H20 L12 ${NECK_Y} L20 ${BASE_Y} H4 L12 ${BOWL_Y} Z"/>
+            <path class="frame" d="M3 1.6 H21 M3 ${BASE_Y + 1.4} H21"/>
+          </svg>
+        </div>
+      </div>
+      <div class="trip"></div>
+      <div class="detail"></div>`;
+
+    return {
+      el,
+      name: el.querySelector('.name'),
+      tag: el.querySelector('.tag'),
+      label: el.querySelector('.label'),
+      timeRow: el.querySelector('.time-row'),
+      countdown: el.querySelector('.countdown'),
+      topClip: el.querySelector('.top-clip'),
+      botClip: el.querySelector('.bot-clip'),
+      trip: el.querySelector('.trip'),
+      detail: el.querySelector('.detail'),
+    };
+  }
+
+  // Everything that only changes when the server sends a new payload.
+  function fillCard(refs, session) {
+    const mine = session.deviceId === me;
+    refs.el.classList.toggle('mine', mine);
+    refs.name.textContent = session.name;
+    refs.tag.hidden = !mine;
+
+    const towards = session.destination
+      ? `<span class="dest"> to ${esc(session.destination)}</span>` : '';
+    refs.trip.innerHTML =
+      `${badge(session.route, session.express)}` +
+      `<span>to <b>${esc(session.stationName)}</b>${towards}</span>`;
+
+    const arrival = new Date(session.arrivalTime * 1000)
+      .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    refs.detail.textContent =
+      `${session.travelMinutes} min ${MODE_PHRASE[session.mode] ?? session.mode}` +
+      ` + ${session.bufferMinutes} min to the platform · train at ${arrival}`;
+  }
+
+  // Per-second update: text, urgency colour, and the sand levels.
+  function tickCard(refs, session) {
+    const { cls, label, text, run } = countdownFor(session);
+    refs.timeRow.className = `time-row ${cls}`.trim();
+    refs.label.textContent = label;
+    if (refs.countdown.textContent !== text) refs.countdown.textContent = text;
+
+    // Top chamber drains downward; the bottom fills upward.
+    const surface = TOP_Y + run * (NECK_Y - TOP_Y);
+    refs.topClip.setAttribute('y', surface.toFixed(2));
+    refs.topClip.setAttribute('height', (NECK_Y - surface).toFixed(2));
+
+    const fillTop = BASE_Y - run * (BASE_Y - BOWL_Y);
+    refs.botClip.setAttribute('y', fillTop.toFixed(2));
+    refs.botClip.setAttribute('height', (BASE_Y - fillTop).toFixed(2));
+  }
+
+  // Cards are created and removed only as the session set changes, so the sand
+  // animation is never restarted by a re-render.
+  function sync() {
+    const live = sessions.filter(s => s.arrivalTime * 1000 > Date.now() - 60_000);
+    const container = $('cards');
+    const seen = new Set();
+
+    live.forEach((session, index) => {
+      seen.add(session.deviceId);
+      let refs = cards.get(session.deviceId);
+      if (!refs) {
+        refs = buildCard(session);
+        cards.set(session.deviceId, refs);
+        container.appendChild(refs.el);
+      }
+      // Ordering via CSS order, so nodes are never moved and animations persist.
+      refs.el.style.order = String(index);
+      fillCard(refs, session);
+      tickCard(refs, session);
+    });
+
+    for (const [id, refs] of cards) {
+      if (seen.has(id)) continue;
+      refs.el.remove();
+      cards.delete(id);
+    }
+
+    container.classList.toggle('solo', live.length === 1);
+
+    let empty = container.querySelector('.empty');
+    if (!live.length && !empty) {
+      empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'No one is racing for a train right now.';
+      container.appendChild(empty);
+    } else if (live.length && empty) {
+      empty.remove();
+    }
+
+    $('count').textContent = live.length === 0 ? 'no one heading out'
+      : live.length === 1 ? '1 person heading out'
+      : `${live.length} people heading out`;
+  }
+
+  function tick() {
+    $('clock').textContent = new Date().toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', second: '2-digit',
+    });
+    // Countdowns run off absolute timestamps, so they tick without the server.
+    const byId = new Map(sessions.map(s => [s.deviceId, s]));
+    for (const [id, refs] of cards) {
+      const session = byId.get(id);
+      if (session) tickCard(refs, session);
+    }
+    if (sessions.some(s => s.arrivalTime * 1000 <= Date.now() - 60_000)) sync();
+  }
+
+  // The place the board is pointed at, and its weather, so the header matches.
+  function showPlace() {
+    const place = loadPlace() ?? DEFAULT_PLACE;
+    const label = $('place-label');
+    label.className = place.source === 'default' ? 'place-label default' : 'place-label';
+    label.textContent = place.label;
+    return place;
+  }
+
+  async function showWeather(place) {
+    try {
+      const res = await fetch(`/api/weather?lat=${place.lat}&lon=${place.lon}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const weather = await res.json();
+      const el = $('weather');
+      el.textContent = `${weather.icon} ${weather.temperature}° ${weather.description}`;
+      el.title = `Feels like ${weather.feelsLike}° · wind ${weather.windMph} mph`;
+      el.hidden = false;
+    } catch {
+      $('weather').hidden = true;   // the board matters more than the forecast
+    }
+  }
+
+  function setStatus(ok, message) {
+    $('dot').className = ok ? 'dot ok' : 'dot err';
+    $('status').textContent = message;
+  }
+
+  // EventSource handles its own reconnection, so there is no polling loop here.
+  function connect() {
+    const stream = new EventSource('/api/sessions/stream');
+
+    stream.addEventListener('sessions', event => {
+      try {
+        sessions = JSON.parse(event.data).sessions ?? [];
+      } catch {
+        sessions = [];
+      }
+      sync();
+      setStatus(true, 'Live · updated ' + new Date().toLocaleTimeString());
+    });
+
+    stream.onopen = () => setStatus(true, 'Live');
+    stream.onerror = () => setStatus(false, 'Reconnecting…');
+  }
+
+  sync();
+  tick();
+  setInterval(tick, 1000);
+  const place = showPlace();
+  showWeather(place);
+  setInterval(() => showWeather(loadPlace() ?? DEFAULT_PLACE), 10 * 60_000);
+  connect();
+</script>
+</body>
+</html>

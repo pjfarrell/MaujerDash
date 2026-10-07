@@ -10,7 +10,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY server.js home.html stations.json ./
+COPY server.js home.html dashboard.html shared.js shared.css stations.json ./
 COPY scripts ./scripts
 
 # The node image ships an unprivileged `node` user; nothing here needs root.

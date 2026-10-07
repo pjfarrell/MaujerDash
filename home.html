@@ -4,22 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nearby Trains</title>
+  <link rel="stylesheet" href="/shared.css">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <script src="/shared.js"></script>
   <script src="/vendor/leaflet/leaflet.js" defer></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:      #111;
-      --surface: #1b1b1b;
-      --border:  #2c2c2c;
-      --red:     #e03131;
-      --yellow:  #f5a623;
-      --green:   #6cbe45;
-      --white:   #f0f0f0;
-      --muted:   #5a5a5a;
-      --dim:     #8a8a8a;
-    }
 
     html, body { height: 100%; }
 
@@ -39,40 +29,9 @@
       text-align: center;
     }
 
-    header h1 {
-      font-size: clamp(1rem, 3.5vw, 1.4rem);
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .meta {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 4px 10px;
-      margin-top: 5px;
-      color: var(--muted);
-      font-size: 0.82rem;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: 0.02em;
-    }
-
-    .weather { color: var(--dim); }
     .weather::before { content: '·'; margin-right: 10px; color: var(--muted); }
     .focus-now .weather::before { margin-right: 8px; }
 
-    button.weather {
-      font: inherit;
-      font-size: 0.82rem;
-      background: none;
-      border: none;
-      border-radius: 0;
-      padding: 0;
-      letter-spacing: inherit;
-    }
-    button.weather:hover { color: var(--white); }
 
     /* Day forecast widget */
     .wx-panel {
@@ -291,28 +250,8 @@
 
     /* Narrow screens: let the "showing stations near" label take its own line
        rather than squeezing the place name down to an ellipsis */
-    @media (max-width: 480px) {
-      .place-bar { flex-wrap: wrap; justify-content: center; padding-left: 6px; }
-      .place-prefix { flex-basis: 100%; text-align: center; padding-top: 3px; }
-    }
 
     .badges { display: flex; gap: 4px; flex-shrink: 0; }
-
-    .badge {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.82rem;
-      font-weight: 900;
-      flex-shrink: 0;
-    }
-
-    /* Express runs are signed as a diamond, same as on the platform */
-    .badge.express { border-radius: 4px; transform: rotate(45deg); }
-    .badge.express > span { display: block; transform: rotate(-45deg); }
 
     .station-name {
       font-size: 0.88rem;
@@ -495,17 +434,12 @@
       text-align: center;
     }
 
-    .focus-now {
+    .focus-bar {
       position: absolute;
-      top: 16px;
+      top: 0;
       left: 0;
       right: 0;
-      text-align: center;
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--dim);
-      font-variant-numeric: tabular-nums;
-      letter-spacing: 0.04em;
+      padding: 14px 18px;
     }
 
     .focus-label {
@@ -586,6 +520,28 @@
 
     .focus-note { font-size: 0.64rem; color: var(--muted); font-style: italic; }
 
+    .focus-share {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .focus-share b { color: var(--dim); font-weight: 700; }
+    .focus-share button {
+      font-size: 0.66rem;
+      padding: 3px 10px;
+      color: var(--dim);
+    }
+    .focus-share input {
+      font-size: 0.72rem;
+      padding: 3px 9px;
+      border-radius: 8px;
+      background: var(--bg);
+      width: 150px;
+    }
+
     #focus-exit { padding: 8px 22px; }
 
     @media (prefers-reduced-motion: reduce) {
@@ -617,33 +573,6 @@
     /* Location picker */
     [hidden] { display: none !important; }
 
-    .place-bar {
-      display: inline-flex;
-      align-items: center;
-      gap: 9px;
-      max-width: 100%;
-      padding: 5px 6px 5px 14px;
-      border: 1px solid var(--border);
-      border-radius: 99px;
-      background: var(--surface);
-    }
-
-    .place-prefix {
-      font-size: 0.68rem;
-      text-transform: uppercase;
-      letter-spacing: 0.11em;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-
-    .place-label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .place-label.default { color: var(--dim); font-weight: 400; font-style: italic; }
 
     .picker {
       max-width: 520px;
@@ -828,20 +757,23 @@
 <body>
 
 <header>
-  <h1>Nearby Trains</h1>
-  <div class="meta">
-    <span id="clock"></span>
-    <button id="weather" class="weather" hidden aria-expanded="false"
-            title="Show the next 12 hours"></button>
+  <div class="bar">
+    <h1><a class="brand" href="/">Nearby Trains</a></h1>
+    <span class="place-bar">
+      <span class="place-prefix" hidden>Showing stations near</span>
+      <span class="place-label">Locating&hellip;</span>
+      <button id="change">Change</button>
+    </span>
+    <span class="bar-right">
+      <span id="clock" class="bar-clock"></span>
+      <button id="weather" class="weather" hidden aria-expanded="false"
+              title="Show the next 12 hours"></button>
+      <a class="dash-link" href="/dashboard">Dashboard &rarr;</a>
+    </span>
   </div>
 
   <div class="wx-panel" id="wx-panel" hidden></div>
   <div class="controls">
-    <span class="place-bar">
-      <span class="place-prefix" id="place-prefix" hidden>Showing stations near</span>
-      <span class="place-label" id="place-label">Locating&hellip;</span>
-      <button id="change">Change</button>
-    </span>
     <span class="modes" id="modes" role="group" aria-label="Travel method">
       <button data-mode="walk" aria-pressed="true">Walk</button>
       <button data-mode="bike" aria-pressed="false">Bike</button>
@@ -895,9 +827,17 @@
 </footer>
 
 <div id="focus" hidden>
-  <div class="focus-now">
-    <span id="focus-now"></span>
-    <span id="focus-weather" class="weather" hidden></span>
+  <div class="bar focus-bar">
+    <h1><a class="brand" href="/" id="focus-home">Nearby Trains</a></h1>
+    <span class="place-bar">
+      <span class="place-prefix" hidden>Showing stations near</span>
+      <span class="place-label">Locating&hellip;</span>
+    </span>
+    <span class="bar-right">
+      <span id="focus-now" class="bar-clock"></span>
+      <span id="focus-weather" class="weather" hidden></span>
+      <a class="dash-link" href="/dashboard">Dashboard &rarr;</a>
+    </span>
   </div>
   <div class="focus-label" id="focus-label">Leave in</div>
   <div class="focus-timer" id="focus-timer">--:--</div>
@@ -905,6 +845,7 @@
   <div class="focus-sub" id="focus-sub"></div>
   <div class="focus-checklist" id="focus-checklist" hidden></div>
   <div class="focus-modes" id="focus-modes"></div>
+  <div class="focus-share" id="focus-share"></div>
   <div id="focus-map"></div>
   <div class="focus-note" id="focus-note"></div>
   <div class="focus-math" id="focus-math"></div>
@@ -912,29 +853,8 @@
 </div>
 
 <script>
-  // Official line colors, so a station's badges read the way the signage does.
-  const ROUTE_COLORS = {
-    1: '#ee352e', 2: '#ee352e', 3: '#ee352e',
-    4: '#00933c', 5: '#00933c', 6: '#00933c',
-    7: '#b933ad',
-    A: '#0039a6', C: '#0039a6', E: '#0039a6',
-    B: '#ff6319', D: '#ff6319', F: '#ff6319', M: '#ff6319',
-    G: '#6cbe45',
-    J: '#996633', Z: '#996633',
-    N: '#fccc0a', Q: '#fccc0a', R: '#fccc0a', W: '#fccc0a',
-    L: '#a7a9ac',
-    S: '#808183', SIR: '#0078c6', SI: '#0078c6',
-  };
-  const DARK_TEXT = new Set(['N', 'Q', 'R', 'W', 'L', 'S']);
-
   const REFRESH_MS = 15_000;
-  const PLACE_KEY = 'maujerdash:place';
   const CHECKLIST_KEY = 'maujerdash:checklist';
-
-  // The app's namesake, shown until someone picks a location of their own.
-  const DEFAULT_PLACE = {
-    lat: 40.7118, lon: -73.943, label: 'Maujer St, Brooklyn', source: 'default',
-  };
 
   // The place stays put once chosen — only the arrival times refresh.
   const state = {
@@ -1054,15 +974,6 @@
 
   const $ = id => document.getElementById(id);
 
-  function loadPlace() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(PLACE_KEY));
-      return Number.isFinite(saved?.lat) && Number.isFinite(saved?.lon) ? saved : null;
-    } catch {
-      return null;
-    }
-  }
-
   function setPlace(place) {
     state.place = place;
     state.note = null;
@@ -1131,17 +1042,20 @@
   }
 
   function renderPlace(data) {
-    const label = $('place-label');
+    const labels = document.querySelectorAll('.place-label');
+    const prefixes = document.querySelectorAll('.place-prefix');
     const note = $('location-note');
     const place = state.place ?? DEFAULT_PLACE;
 
-    if (state.locating) {
-      $('place-prefix').hidden = true;
-      label.className = 'place-label';
-      label.textContent = 'Locating…';
-      label.removeAttribute('title');
-    } else {
-      $('place-prefix').hidden = false;
+    for (const prefix of prefixes) prefix.hidden = state.locating;
+
+    for (const label of labels) {
+      if (state.locating) {
+        label.className = 'place-label';
+        label.textContent = 'Locating…';
+        label.removeAttribute('title');
+        continue;
+      }
       label.className = place.source === 'default' ? 'place-label default' : 'place-label';
       label.textContent = place.label;
       // Coordinates and GPS accuracy are detail, not headline: keep them on hover.
@@ -1161,13 +1075,6 @@
     const feet = miles * 5280;
     if (feet < 1000) return `${Math.round(feet / 10) * 10} ft`;
     return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
-  }
-
-  function badge(route, express) {
-    const color = ROUTE_COLORS[route] || '#808183';
-    const text = DARK_TEXT.has(route) ? '#000' : '#fff';
-    return `<span class="badge${express ? ' express' : ''}" style="background:${color};color:${text}">` +
-           `<span>${esc(route)}</span></span>`;
   }
 
   const MODES = ['walk', 'bike', 'drive'];
@@ -1254,11 +1161,6 @@
               </div>
               <div class="station-dirs">${station.directions.map(d => renderDirection(d, station)).join('')}</div>
             </section>`;
-  }
-
-  function esc(text) {
-    return String(text).replace(/[&<>"']/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   // Weather — refreshed on its own slow clock, and whenever the place moves.
@@ -1545,9 +1447,79 @@
     return leaveDeadline(train, station, state.mode) > Date.now();
   }
 
-  function clock(ms) {
-    const total = Math.max(0, Math.round(ms / 1000));
-    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  // --- Casting to the dashboard --------------------------------
+  // A session belongs to a device. The board re-posts on every refresh, which
+  // doubles as a heartbeat: stop posting and the dashboard drops the session.
+  const SHARE_ENDPOINT = '/api/sessions';
+
+  function sessionBody() {
+    const session = state.session;
+    if (!session) return null;
+    const station = state.byId.get(session.stationId);
+    return {
+      deviceId: deviceId(),
+      name: displayName(),
+      stationId: session.stationId,
+      dirCode: session.dirCode,
+      route: session.route,
+      express: Boolean(session.express),
+      destination: session.destination,
+      arrivalTime: session.arrivalTime,
+      mode: session.mode,
+      travelMinutes: station?.travel?.[session.mode] ?? 0,
+      bufferMinutes: LEAVE_BUFFER_MIN,
+    };
+  }
+
+  async function castSession() {
+    const body = sessionBody();
+    if (!body) return;
+    try {
+      await fetch(SHARE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      // The countdown is local and keeps working; only the dashboard misses out.
+    }
+  }
+
+  async function withdrawSession() {
+    try {
+      await fetch(`${SHARE_ENDPOINT}/${encodeURIComponent(deviceId())}`, { method: 'DELETE' });
+    } catch { /* it will age out on the server anyway */ }
+  }
+
+  function renderShare() {
+    const el = $('focus-share');
+    if (!el) return;
+    el.innerHTML =
+      `<span>Shown on the dashboard as <b>${esc(displayName())}</b></span>` +
+      `<button id="rename">Rename</button>`;
+    $('rename').addEventListener('click', startRename);
+  }
+
+  function startRename() {
+    const el = $('focus-share');
+    el.innerHTML =
+      `<input id="name-input" type="text" maxlength="32" aria-label="Your name"` +
+      ` value="${esc(displayName())}">` +
+      `<button id="name-save">Save</button>`;
+    const input = $('name-input');
+    input.focus({ preventScroll: true });
+    input.select();
+
+    const save = () => {
+      setDisplayName(input.value);
+      renderShare();
+      castSession();
+    };
+    $('name-save').addEventListener('click', save);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') save();
+      if (event.key === 'Escape') renderShare();
+    });
   }
 
   function startSession(stationId, dirCode, index) {
@@ -1569,18 +1541,22 @@
     };
     $('focus').hidden = false;
     renderSession();
+    renderShare();
+    castSession();
     showFocusRoute(station);
   }
 
   function endSession() {
     state.session = null;
     $('focus').hidden = true;
+    withdrawSession();
   }
 
   function setSessionMode(mode) {
     if (!state.session) return;
     state.session.mode = mode;
     renderSession();
+    castSession();   // the deadline moved, so the dashboard should follow
   }
 
   // --- Session map ---------------------------------------------
@@ -1828,6 +1804,7 @@
       $('stations').innerHTML = data.stations.length
         ? data.stations.map(renderStation).join('')
         : '<section class="station"><div class="dir-section"><span class="empty">No stations found</span></div></section>';
+      if (state.session) castSession();   // heartbeat, and picks up delays
       wireCardHighlights();
       renderMap(data);
       renderPlace(data);
@@ -1923,6 +1900,10 @@
   });
 
   $('focus-exit').addEventListener('click', endSession);
+  $('focus-home').addEventListener('click', event => {
+    event.preventDefault();
+    endSession();
+  });
   $('focus-modes').addEventListener('click', event => {
     const button = event.target.closest('button[data-mode]');
     if (button && !button.disabled) setSessionMode(button.dataset.mode);

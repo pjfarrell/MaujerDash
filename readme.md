@@ -14,6 +14,21 @@ Clicking a station traces the street route to it on the map. Clicking one of its
 
 The session shows the route to the station and its own **Walk / Bike / Drive** selector, each labelled with its travel time, so you can reconsider for one train without changing the board. Switching recomputes the countdown, and a method that can no longer make the train is greyed out — so a train 20 minutes away from a station 17 minutes' walk offers only Bike and Drive. A session opens on the board's method, or on the simplest one that still makes the train if that method no longer does. Press `Escape` or `End session` to leave.
 
+## The shared dashboard
+
+`/dashboard` shows every focus session running right now, from every device on this instance, as a wall of live countdowns. Starting a session on the board casts it there; ending it, or catching the train, takes it down.
+
+How it hangs together:
+
+- **Identity is per device, not per account.** The browser generates an opaque id on first visit and keeps it in `localStorage`. It is the only thing tying a session to a visitor — there are no accounts and nothing to sign into.
+- **Names** start as a readable pair derived from that id (`Quiet Otter`), stable for the same device. A focus session shows yours and lets you rename it; the override is saved per device.
+- **The server holds sessions in memory**, keyed by device id. They last minutes, so losing them on a restart is not worth a database and there is nothing to back up.
+- **The board heartbeats.** It re-posts the session on every refresh, which also carries any revision to the train's arrival, so a delay moves the deadline on the dashboard too. Stop posting and the session ages out after 90 seconds; it is also dropped a minute after its train was due.
+- **The dashboard is pushed, not polled**, over Server-Sent Events. Countdowns tick locally from absolute timestamps, so the stream only carries changes, and `EventSource` handles reconnection by itself.
+- **Display fields come from the server's own station index**, not from whatever the client posted, so a crafted request cannot put arbitrary text on the dashboard.
+
+Worth knowing before exposing this beyond your own network: a session says where someone is heading and when they leave, and anyone who can reach the instance sees every session. On a home network that is the point; on a public address it is a disclosure. There is no authentication on any endpoint.
+
 ## A caveat on travel times
 
 Travel times come from the public [OSRM](https://project-osrm.org/) demo server, which only runs the **car** profile — it returns identical numbers whatever profile you ask it for. So the app takes the *street distance* from OSRM and derives walking (3 mph) and cycling (10 mph) times from it, and uses OSRM's duration only for driving. Two consequences worth knowing:

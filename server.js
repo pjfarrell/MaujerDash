@@ -292,6 +292,8 @@ async function nearby(req, res) {
   });
 }
 
+app.use(express.json({ limit: '8kb' }));
+
 app.use((_, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   next();
@@ -309,6 +311,146 @@ app.get('/healthz', (_req, res) => {
 
 app.get('/api/nearby', nearby);
 app.get('/api/trains', nearby); // legacy path, same payload
+
+// --- Shared focus sessions ------------------------------------
+// The one piece of cross-visitor state in the app: who is currently racing for
+// a train. Held in memory only - sessions last minutes, and losing them on a
+// restart is not worth a database.
+const SESSION_TTL_MS = 90_000;      // drop a session we stop hearing from
+const SESSION_GRACE_MS = 60_000;    // keep it briefly after the train is due
+const MAX_SESSIONS = 200;
+const MAX_NAME = 32;
+
+const sessions = new Map();         // deviceId -> session
+const sessionClients = new Set();   // open SSE responses
+
+const isDeviceId = v => typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v);
+
+function cleanText(value, fallback, limit) {
+  if (typeof value !== 'string') return fallback;
+  // Collapse whitespace and drop control characters; clients escape on render.
+  const text = value.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, limit) : fallback;
+}
+
+function clampNumber(value, lo, hi) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : null;
+}
+
+// Expire sessions whose train has gone, or whose device stopped checking in.
+function pruneSessions() {
+  const now = Date.now();
+  let changed = false;
+  for (const [id, session] of sessions) {
+    const stale = now - session.updatedAt > SESSION_TTL_MS;
+    const departed = now > session.arrivalTime * 1000 + SESSION_GRACE_MS;
+    if (stale || departed) {
+      sessions.delete(id);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+const sessionList = () => [...sessions.values()].sort((a, b) => a.leaveAt - b.leaveAt);
+
+const sessionPayload = () => JSON.stringify({ sessions: sessionList(), now: Date.now() });
+
+function broadcastSessions() {
+  if (!sessionClients.size) return;
+  const frame = `event: sessions\ndata: ${sessionPayload()}\n\n`;
+  for (const client of sessionClients) client.write(frame);
+}
+
+app.get('/api/sessions', (_req, res) => {
+  pruneSessions();
+  res.type('application/json').send(sessionPayload());
+});
+
+// Live feed for the dashboard. EventSource reconnects on its own, so there is
+// no polling fallback to keep in step here.
+app.get('/api/sessions/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('retry: 3000\n\n');
+
+  pruneSessions();
+  res.write(`event: sessions\ndata: ${sessionPayload()}\n\n`);
+
+  sessionClients.add(res);
+  const keepAlive = setInterval(() => res.write(': ping\n\n'), 25_000);
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    sessionClients.delete(res);
+  });
+});
+
+// Start or refresh a session. The board re-posts on every refresh, which doubles
+// as the heartbeat and carries any revision to the train's arrival time.
+app.post('/api/sessions', (req, res) => {
+  const body = req.body ?? {};
+  if (!isDeviceId(body.deviceId)) return res.status(400).json({ error: 'Bad deviceId' });
+
+  const station = STATIONS.find(s => s.id === body.stationId);
+  if (!station) return res.status(400).json({ error: 'Unknown stationId' });
+
+  const arrivalTime = clampNumber(body.arrivalTime, 1, 2 ** 40);
+  if (!arrivalTime) return res.status(400).json({ error: 'Bad arrivalTime' });
+
+  const existing = sessions.get(body.deviceId);
+  if (!existing && sessions.size >= MAX_SESSIONS) {
+    return res.status(503).json({ error: 'Too many active sessions' });
+  }
+
+  const southbound = body.dirCode === 'S';
+  const travelMinutes = clampNumber(body.travelMinutes, 0, 600) ?? 0;
+  const bufferMinutes = clampNumber(body.bufferMinutes, 0, 60) ?? 0;
+
+  const session = {
+    deviceId: body.deviceId,
+    name: cleanText(body.name, 'Someone', MAX_NAME),
+    // Display fields come from our own station index, not from the client.
+    stationId: station.id,
+    stationName: station.name,
+    routes: station.routes,
+    dirCode: southbound ? 'S' : 'N',
+    dirLabel: southbound ? station.south : station.north,
+    route: cleanText(body.route, '?', 4),
+    express: Boolean(body.express),
+    destination: cleanText(body.destination, null, 60),
+    arrivalTime,
+    mode: ['walk', 'bike', 'drive'].includes(body.mode) ? body.mode : 'walk',
+    travelMinutes,
+    bufferMinutes,
+    leaveAt: arrivalTime * 1000 - (travelMinutes + bufferMinutes) * 60_000,
+    startedAt: existing?.startedAt ?? Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  sessions.set(session.deviceId, session);
+  pruneSessions();
+  broadcastSessions();
+  res.json(session);
+});
+
+app.delete('/api/sessions/:deviceId', (req, res) => {
+  if (!isDeviceId(req.params.deviceId)) return res.status(400).json({ error: 'Bad deviceId' });
+  const removed = sessions.delete(req.params.deviceId);
+  pruneSessions();
+  if (removed) broadcastSessions();
+  res.json({ removed });
+});
+
+// Sessions also age out with no traffic at all, so the dashboard empties itself
+// once everyone has caught their train.
+setInterval(() => {
+  if (pruneSessions()) broadcastSessions();
+}, 15_000);
 
 // The street path from the origin to one station, for drawing on the map.
 // The geometry is a car route (see the OSRM note above), so a walking line may
@@ -566,6 +708,8 @@ app.get('/api/debug/stops', async (req, res) => {
 // Leaflet is served from node_modules rather than a CDN, so the only external
 // requests the page makes are for map tiles.
 app.use('/vendor/leaflet', express.static(path.join(__dirname, 'node_modules/leaflet/dist')));
+
+app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 
 app.use(express.static(__dirname, { index: 'home.html' }));
 

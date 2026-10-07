@@ -1,0 +1,160 @@
+/* Theme tokens and line badges, shared by the board and the dashboard. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #111;
+  --surface: #1b1b1b;
+  --border:  #2c2c2c;
+  --red:     #e03131;
+  --yellow:  #f5a623;
+  --green:   #6cbe45;
+  --white:   #f0f0f0;
+  --muted:   #5a5a5a;
+  --dim:     #8a8a8a;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+[hidden] { display: none !important; }
+
+.badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+/* Express runs are signed as a diamond, same as on the platform */
+.badge.express { border-radius: 4px; transform: rotate(45deg); }
+.badge.express > span { display: block; transform: rotate(-45deg); }
+
+/* The wordmark is the way home, on every page. It inherits the surrounding
+   heading styles so each page can size it to taste. */
+.brand {
+  color: inherit;
+  text-decoration: none;
+}
+.brand:hover { opacity: 0.78; }
+
+/* Sub-heading naming the page under the wordmark. */
+.page-title {
+  margin-top: 4px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* One header bar for every page: wordmark, where you are, the weather, and the
+   link across to the dashboard. */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 9px 16px;
+  text-align: left;
+}
+
+.bar h1 {
+  flex: 0 0 auto;
+  font-size: clamp(0.95rem, 3.2vw, 1.3rem);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The place bar takes the middle and gives way first: its label already
+   ellipsises, which beats pushing the clock and links onto their own row. */
+.bar .place-bar {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.bar .bar-right { flex: 0 0 auto; margin-left: auto; }
+
+.bar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.bar-clock {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.place-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 5px 6px 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+}
+
+.place-prefix {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.place-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.place-label.default { color: var(--dim); font-weight: 400; font-style: italic; }
+
+.weather { color: var(--dim); }
+
+button.weather {
+  font: inherit;
+  font-size: 0.78rem;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  letter-spacing: inherit;
+  color: var(--dim);
+  cursor: pointer;
+}
+button.weather:hover { color: var(--white); }
+
+.dash-link { color: var(--dim); text-decoration: none; white-space: nowrap; }
+.dash-link:hover { color: var(--white); }
+.dash-link[aria-current='page'] { color: var(--white); cursor: default; }
+
+/* Stack the bar on a phone rather than squeezing it. */
+@media (max-width: 620px) {
+  .bar { justify-content: center; text-align: center; }
+  .bar-right { justify-content: center; }
+  .place-bar { padding-left: 10px; }
+  .place-prefix { display: none; }
+}
