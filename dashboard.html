@@ -20,14 +20,15 @@
       text-transform: uppercase;
     }
 
+    header { text-align: center; }
+
     .meta {
-      margin-top: 5px;
-      font-size: 0.82rem;
+      margin-top: 4px;
+      font-size: 0.78rem;
       color: var(--muted);
       font-variant-numeric: tabular-nums;
       letter-spacing: 0.02em;
     }
-    .meta a { color: var(--dim); }
 
     /* Sessions are bubbles: one big one on its own, shrinking to a row of
        equal circles as others join. */
@@ -221,17 +222,20 @@
 <body>
 
 <header>
-  <a class="home-btn" href="/" aria-label="Home">
-    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-      <path d="M8 1.6 1.4 7.2h2v7.2h3.1V10h3v4.4h3.1V7.2h2z" fill="currentColor"/>
-    </svg>
-    <span class="home-label">Home</span>
-  </a>
-  <h1>Focus Sessions</h1>
-  <div class="meta">
-    <span id="clock"></span>
-    &middot; <span id="count">no one heading out</span>
+  <div class="bar">
+    <h1><a class="brand" href="/">Nearby Trains</a></h1>
+    <span class="place-bar">
+      <span class="place-prefix">Showing stations near</span>
+      <span class="place-label" id="place-label"></span>
+    </span>
+    <span class="bar-right">
+      <span id="clock" class="bar-clock"></span>
+      <span id="weather" class="weather" hidden></span>
+      <a class="dash-link" href="/dashboard" aria-current="page">Dashboard</a>
+    </span>
   </div>
+  <div class="page-title">Focus Sessions</div>
+  <div class="meta"><span id="count">no one heading out</span></div>
 </header>
 
 <main id="cards"></main>
@@ -407,6 +411,29 @@
     if (sessions.some(s => s.arrivalTime * 1000 <= Date.now() - 60_000)) sync();
   }
 
+  // The place the board is pointed at, and its weather, so the header matches.
+  function showPlace() {
+    const place = loadPlace() ?? DEFAULT_PLACE;
+    const label = $('place-label');
+    label.className = place.source === 'default' ? 'place-label default' : 'place-label';
+    label.textContent = place.label;
+    return place;
+  }
+
+  async function showWeather(place) {
+    try {
+      const res = await fetch(`/api/weather?lat=${place.lat}&lon=${place.lon}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const weather = await res.json();
+      const el = $('weather');
+      el.textContent = `${weather.icon} ${weather.temperature}° ${weather.description}`;
+      el.title = `Feels like ${weather.feelsLike}° · wind ${weather.windMph} mph`;
+      el.hidden = false;
+    } catch {
+      $('weather').hidden = true;   // the board matters more than the forecast
+    }
+  }
+
   function setStatus(ok, message) {
     $('dot').className = ok ? 'dot ok' : 'dot err';
     $('status').textContent = message;
@@ -433,6 +460,9 @@
   sync();
   tick();
   setInterval(tick, 1000);
+  const place = showPlace();
+  showWeather(place);
+  setInterval(() => showWeather(loadPlace() ?? DEFAULT_PLACE), 10 * 60_000);
   connect();
 </script>
 </body>

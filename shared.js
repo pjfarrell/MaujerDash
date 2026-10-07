@@ -32,6 +32,24 @@ function clock(ms) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+// --- Chosen place --------------------------------------------
+// The board owns this; other pages read it so their header agrees.
+const PLACE_KEY = 'maujerdash:place';
+
+// The app's namesake, shown until someone picks a location of their own.
+const DEFAULT_PLACE = {
+  lat: 40.7118, lon: -73.943, label: 'Maujer St, Brooklyn', source: 'default',
+};
+
+function loadPlace() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PLACE_KEY));
+    return Number.isFinite(saved?.lat) && Number.isFinite(saved?.lon) ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 // --- Device identity -----------------------------------------
 // A session is owned by a device, not an account: the id is generated in the
 // browser, kept in localStorage, and only ever leaves as an opaque string.
