@@ -99,7 +99,7 @@ body {
   color: var(--muted);
 }
 
-/* The time gets a row of its own under the bar, set in bold figures. */
+/* The date and time get a row of their own under the bar, set in bold figures. */
 .bar-time {
   margin-top: 7px;
   text-align: center;
@@ -109,9 +109,8 @@ body {
   letter-spacing: 0.02em;
   color: var(--white);
 }
+/* Same face and size as the time; only the colour sets it back. */
 .bar-time .bar-date {
-  font-size: 0.78rem;
-  font-weight: 500;
   color: var(--muted);
 }
 
