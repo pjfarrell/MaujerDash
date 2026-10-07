@@ -765,7 +765,7 @@
       <button id="change">Change</button>
     </span>
     <span class="bar-right">
-      <span id="clock" class="bar-clock"></span>
+      <span class="bar-clock"><span class="bar-date" id="clock-date"></span><span id="clock-time"></span></span>
       <button id="weather" class="weather" hidden aria-expanded="false"
               title="Show the next 12 hours"></button>
       <a class="dash-link" href="/dashboard">Dashboard &rarr;</a>
@@ -995,9 +995,9 @@
     const time = now.toLocaleTimeString('en-US', {
       hour: 'numeric', minute: '2-digit', second: '2-digit',
     });
-    $('clock').textContent =
-      now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) +
-      ' · ' + time;
+    $('clock-date').textContent =
+      now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' · ';
+    $('clock-time').textContent = time;
     $('focus-now').textContent = time;
   }
   tick();

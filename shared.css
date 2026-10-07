@@ -66,10 +66,10 @@ body {
 .bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 9px 16px;
-  text-align: left;
+  text-align: center;
 }
 
 .bar h1 {
@@ -88,7 +88,7 @@ body {
   min-width: 0;
 }
 
-.bar .bar-right { flex: 0 0 auto; margin-left: auto; }
+.bar .bar-right { flex: 0 0 auto; }
 
 .bar-right {
   display: flex;
@@ -151,10 +151,15 @@ button.weather:hover { color: var(--white); }
 .dash-link:hover { color: var(--white); }
 .dash-link[aria-current='page'] { color: var(--white); cursor: default; }
 
-/* Stack the bar on a phone rather than squeezing it. */
-@media (max-width: 620px) {
-  .bar { justify-content: center; text-align: center; }
-  .bar-right { justify-content: center; }
-  .place-bar { padding-left: 10px; }
+/* Keeping the row on one line matters more than the wording around it, so the
+   date and the "showing stations near" prefix go first; the place itself, the
+   time, the weather and the link all stay. */
+@media (max-width: 1150px) {
+  .bar-date { display: none; }
   .place-prefix { display: none; }
+  .place-bar { padding-left: 10px; }
+}
+
+@media (max-width: 620px) {
+  .bar-right { justify-content: center; }
 }
