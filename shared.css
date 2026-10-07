@@ -42,3 +42,35 @@ body {
 /* Express runs are signed as a diamond, same as on the platform */
 .badge.express { border-radius: 4px; transform: rotate(45deg); }
 .badge.express > span { display: block; transform: rotate(-45deg); }
+
+/* Home button, pinned to the top-left of every page's header. */
+header { position: relative; }
+
+.home-btn {
+  position: absolute;
+  /* Anchored to the top, not centred: the board's header is much taller than
+     the dashboard's, and centring drops the button into the controls. */
+  top: 14px;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.home-btn:hover { color: var(--white); border-color: #444; }
+.home-btn svg { display: block; }
+
+/* On a narrow screen the label would crowd the title; the house carries it. */
+@media (max-width: 560px) {
+  .home-btn { padding: 6px 8px; left: 10px; }
+  .home-btn .home-label { display: none; }
+}
