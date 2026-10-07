@@ -4,22 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nearby Trains</title>
+  <link rel="stylesheet" href="/shared.css">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <script src="/shared.js"></script>
   <script src="/vendor/leaflet/leaflet.js" defer></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:      #111;
-      --surface: #1b1b1b;
-      --border:  #2c2c2c;
-      --red:     #e03131;
-      --yellow:  #f5a623;
-      --green:   #6cbe45;
-      --white:   #f0f0f0;
-      --muted:   #5a5a5a;
-      --dim:     #8a8a8a;
-    }
 
     html, body { height: 100%; }
 
@@ -60,6 +50,10 @@
     }
 
     .weather { color: var(--dim); }
+
+    .dash-link { color: var(--dim); font-size: 0.78rem; }
+    .dash-link::before { content: '\00b7'; margin-right: 10px; color: var(--muted); }
+    .dash-link:hover { color: var(--white); }
     .weather::before { content: '·'; margin-right: 10px; color: var(--muted); }
     .focus-now .weather::before { margin-right: 8px; }
 
@@ -297,22 +291,6 @@
     }
 
     .badges { display: flex; gap: 4px; flex-shrink: 0; }
-
-    .badge {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.82rem;
-      font-weight: 900;
-      flex-shrink: 0;
-    }
-
-    /* Express runs are signed as a diamond, same as on the platform */
-    .badge.express { border-radius: 4px; transform: rotate(45deg); }
-    .badge.express > span { display: block; transform: rotate(-45deg); }
 
     .station-name {
       font-size: 0.88rem;
@@ -586,6 +564,28 @@
 
     .focus-note { font-size: 0.64rem; color: var(--muted); font-style: italic; }
 
+    .focus-share {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .focus-share b { color: var(--dim); font-weight: 700; }
+    .focus-share button {
+      font-size: 0.66rem;
+      padding: 3px 10px;
+      color: var(--dim);
+    }
+    .focus-share input {
+      font-size: 0.72rem;
+      padding: 3px 9px;
+      border-radius: 8px;
+      background: var(--bg);
+      width: 150px;
+    }
+
     #focus-exit { padding: 8px 22px; }
 
     @media (prefers-reduced-motion: reduce) {
@@ -833,6 +833,7 @@
     <span id="clock"></span>
     <button id="weather" class="weather" hidden aria-expanded="false"
             title="Show the next 12 hours"></button>
+    <a class="dash-link" href="/dashboard">Dashboard &rarr;</a>
   </div>
 
   <div class="wx-panel" id="wx-panel" hidden></div>
@@ -905,6 +906,7 @@
   <div class="focus-sub" id="focus-sub"></div>
   <div class="focus-checklist" id="focus-checklist" hidden></div>
   <div class="focus-modes" id="focus-modes"></div>
+  <div class="focus-share" id="focus-share"></div>
   <div id="focus-map"></div>
   <div class="focus-note" id="focus-note"></div>
   <div class="focus-math" id="focus-math"></div>
@@ -912,21 +914,6 @@
 </div>
 
 <script>
-  // Official line colors, so a station's badges read the way the signage does.
-  const ROUTE_COLORS = {
-    1: '#ee352e', 2: '#ee352e', 3: '#ee352e',
-    4: '#00933c', 5: '#00933c', 6: '#00933c',
-    7: '#b933ad',
-    A: '#0039a6', C: '#0039a6', E: '#0039a6',
-    B: '#ff6319', D: '#ff6319', F: '#ff6319', M: '#ff6319',
-    G: '#6cbe45',
-    J: '#996633', Z: '#996633',
-    N: '#fccc0a', Q: '#fccc0a', R: '#fccc0a', W: '#fccc0a',
-    L: '#a7a9ac',
-    S: '#808183', SIR: '#0078c6', SI: '#0078c6',
-  };
-  const DARK_TEXT = new Set(['N', 'Q', 'R', 'W', 'L', 'S']);
-
   const REFRESH_MS = 15_000;
   const PLACE_KEY = 'maujerdash:place';
   const CHECKLIST_KEY = 'maujerdash:checklist';
@@ -1163,13 +1150,6 @@
     return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
   }
 
-  function badge(route, express) {
-    const color = ROUTE_COLORS[route] || '#808183';
-    const text = DARK_TEXT.has(route) ? '#000' : '#fff';
-    return `<span class="badge${express ? ' express' : ''}" style="background:${color};color:${text}">` +
-           `<span>${esc(route)}</span></span>`;
-  }
-
   const MODES = ['walk', 'bike', 'drive'];
   const MODE_PHRASE = { walk: 'on foot', bike: 'by bike', drive: 'by car' };
   const MODE_LABEL = { walk: 'Walk', bike: 'Bike', drive: 'Drive' };
@@ -1254,11 +1234,6 @@
               </div>
               <div class="station-dirs">${station.directions.map(d => renderDirection(d, station)).join('')}</div>
             </section>`;
-  }
-
-  function esc(text) {
-    return String(text).replace(/[&<>"']/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   // Weather — refreshed on its own slow clock, and whenever the place moves.
@@ -1545,9 +1520,79 @@
     return leaveDeadline(train, station, state.mode) > Date.now();
   }
 
-  function clock(ms) {
-    const total = Math.max(0, Math.round(ms / 1000));
-    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  // --- Casting to the dashboard --------------------------------
+  // A session belongs to a device. The board re-posts on every refresh, which
+  // doubles as a heartbeat: stop posting and the dashboard drops the session.
+  const SHARE_ENDPOINT = '/api/sessions';
+
+  function sessionBody() {
+    const session = state.session;
+    if (!session) return null;
+    const station = state.byId.get(session.stationId);
+    return {
+      deviceId: deviceId(),
+      name: displayName(),
+      stationId: session.stationId,
+      dirCode: session.dirCode,
+      route: session.route,
+      express: Boolean(session.express),
+      destination: session.destination,
+      arrivalTime: session.arrivalTime,
+      mode: session.mode,
+      travelMinutes: station?.travel?.[session.mode] ?? 0,
+      bufferMinutes: LEAVE_BUFFER_MIN,
+    };
+  }
+
+  async function castSession() {
+    const body = sessionBody();
+    if (!body) return;
+    try {
+      await fetch(SHARE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      // The countdown is local and keeps working; only the dashboard misses out.
+    }
+  }
+
+  async function withdrawSession() {
+    try {
+      await fetch(`${SHARE_ENDPOINT}/${encodeURIComponent(deviceId())}`, { method: 'DELETE' });
+    } catch { /* it will age out on the server anyway */ }
+  }
+
+  function renderShare() {
+    const el = $('focus-share');
+    if (!el) return;
+    el.innerHTML =
+      `<span>Shown on the dashboard as <b>${esc(displayName())}</b></span>` +
+      `<button id="rename">Rename</button>`;
+    $('rename').addEventListener('click', startRename);
+  }
+
+  function startRename() {
+    const el = $('focus-share');
+    el.innerHTML =
+      `<input id="name-input" type="text" maxlength="32" aria-label="Your name"` +
+      ` value="${esc(displayName())}">` +
+      `<button id="name-save">Save</button>`;
+    const input = $('name-input');
+    input.focus({ preventScroll: true });
+    input.select();
+
+    const save = () => {
+      setDisplayName(input.value);
+      renderShare();
+      castSession();
+    };
+    $('name-save').addEventListener('click', save);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') save();
+      if (event.key === 'Escape') renderShare();
+    });
   }
 
   function startSession(stationId, dirCode, index) {
@@ -1569,18 +1614,22 @@
     };
     $('focus').hidden = false;
     renderSession();
+    renderShare();
+    castSession();
     showFocusRoute(station);
   }
 
   function endSession() {
     state.session = null;
     $('focus').hidden = true;
+    withdrawSession();
   }
 
   function setSessionMode(mode) {
     if (!state.session) return;
     state.session.mode = mode;
     renderSession();
+    castSession();   // the deadline moved, so the dashboard should follow
   }
 
   // --- Session map ---------------------------------------------
@@ -1828,6 +1877,7 @@
       $('stations').innerHTML = data.stations.length
         ? data.stations.map(renderStation).join('')
         : '<section class="station"><div class="dir-section"><span class="empty">No stations found</span></div></section>';
+      if (state.session) castSession();   // heartbeat, and picks up delays
       wireCardHighlights();
       renderMap(data);
       renderPlace(data);

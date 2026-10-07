@@ -1,0 +1,44 @@
+/* Theme tokens and line badges, shared by the board and the dashboard. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #111;
+  --surface: #1b1b1b;
+  --border:  #2c2c2c;
+  --red:     #e03131;
+  --yellow:  #f5a623;
+  --green:   #6cbe45;
+  --white:   #f0f0f0;
+  --muted:   #5a5a5a;
+  --dim:     #8a8a8a;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+[hidden] { display: none !important; }
+
+.badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+/* Express runs are signed as a diamond, same as on the platform */
+.badge.express { border-radius: 4px; transform: rotate(45deg); }
+.badge.express > span { display: block; transform: rotate(-45deg); }
