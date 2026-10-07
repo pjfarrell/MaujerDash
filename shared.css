@@ -99,9 +99,20 @@ body {
   color: var(--muted);
 }
 
-.bar-clock {
+/* The time gets a row of its own under the bar, set in bold figures. */
+.bar-time {
+  margin-top: 7px;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
+  color: var(--white);
+}
+.bar-time .bar-date {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .place-bar {
@@ -176,8 +187,7 @@ button.weather:hover { color: var(--white); }
 /* Keeping the row on one line matters more than the wording around it, so the
    date and the "showing stations near" prefix go first; the place itself, the
    time, the weather and the link all stay. */
-@media (max-width: 1150px) {
-  .bar-date { display: none; }
+@media (max-width: 900px) {
   .place-prefix { display: none; }
   .place-bar { padding-left: 10px; }
 }

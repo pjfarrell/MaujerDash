@@ -29,8 +29,6 @@
       text-align: center;
     }
 
-    .weather::before { content: '·'; margin-right: 10px; color: var(--muted); }
-    .focus-now .weather::before { margin-right: 8px; }
 
 
     /* Day forecast widget */
@@ -434,7 +432,7 @@
       text-align: center;
     }
 
-    .focus-bar {
+    .focus-top {
       position: absolute;
       top: 0;
       left: 0;
@@ -765,12 +763,12 @@
       <button id="change">Change</button>
     </span>
     <span class="bar-right">
-      <span class="bar-clock"><span class="bar-date" id="clock-date"></span><span id="clock-time"></span></span>
       <button id="weather" class="weather" hidden aria-expanded="false"
               title="Show the next 12 hours"></button>
       <a class="dash-link" href="/dashboard">Dashboard &rarr;</a>
     </span>
   </div>
+  <div class="bar-time"><span class="bar-date js-date"></span><span class="js-time"></span></div>
 
   <div class="wx-panel" id="wx-panel" hidden></div>
   <div class="controls">
@@ -827,17 +825,19 @@
 </footer>
 
 <div id="focus" hidden>
-  <div class="bar focus-bar">
+  <div class="focus-top">
+  <div class="bar">
     <h1><a class="brand" href="/" id="focus-home">Nearby Trains</a></h1>
     <span class="place-bar">
       <span class="place-prefix" hidden>Showing stations near</span>
       <span class="place-label">Locating&hellip;</span>
     </span>
     <span class="bar-right">
-      <span id="focus-now" class="bar-clock"></span>
       <span id="focus-weather" class="weather" hidden></span>
       <a class="dash-link" href="/dashboard">Dashboard &rarr;</a>
     </span>
+  </div>
+  <div class="bar-time"><span class="bar-date js-date"></span><span class="js-time"></span></div>
   </div>
   <div class="focus-label" id="focus-label">Leave in</div>
   <div class="focus-timer" id="focus-timer">--:--</div>
@@ -995,10 +995,9 @@
     const time = now.toLocaleTimeString('en-US', {
       hour: 'numeric', minute: '2-digit', second: '2-digit',
     });
-    $('clock-date').textContent =
-      now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' · ';
-    $('clock-time').textContent = time;
-    $('focus-now').textContent = time;
+    const date = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    for (const el of document.querySelectorAll('.js-date')) el.textContent = date + ' · ';
+    for (const el of document.querySelectorAll('.js-time')) el.textContent = time;
   }
   tick();
   setInterval(tick, 1000);
