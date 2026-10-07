@@ -31,6 +31,17 @@
 
 
 
+    .resume-btn {
+      padding: 6px 14px;
+      border-radius: 99px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: #111;
+      background: var(--green);
+      border-color: var(--green);
+    }
+    .resume-btn:hover { opacity: 0.85; border-color: var(--green); }
+
     /* Day forecast widget */
     .wx-panel {
       max-width: 640px;
@@ -765,6 +776,7 @@
     <span class="bar-right">
       <button id="weather" class="weather" hidden aria-expanded="false"
               title="Show the next 12 hours"></button>
+      <button id="resume" class="resume-btn" hidden>Back to session</button>
       <a class="dash-link" href="/dashboard">Dashboard &rarr;</a>
     </span>
   </div>
@@ -1449,46 +1461,18 @@
   // --- Casting to the dashboard --------------------------------
   // A session belongs to a device. The board re-posts on every refresh, which
   // doubles as a heartbeat: stop posting and the dashboard drops the session.
-  const SHARE_ENDPOINT = '/api/sessions';
 
-  function sessionBody() {
-    const session = state.session;
-    if (!session) return null;
-    const station = state.byId.get(session.stationId);
-    return {
-      deviceId: deviceId(),
-      name: displayName(),
-      stationId: session.stationId,
-      dirCode: session.dirCode,
-      route: session.route,
-      express: Boolean(session.express),
-      destination: session.destination,
-      arrivalTime: session.arrivalTime,
-      mode: session.mode,
-      travelMinutes: station?.travel?.[session.mode] ?? 0,
-      bufferMinutes: LEAVE_BUFFER_MIN,
-    };
+  // The deadline is computed from the session's own travel time rather than
+  // looked up, so a session restored before the board has loaded still counts
+  // down correctly.
+  function sessionDeadline(session) {
+    return session.arrivalTime * 1000
+      - ((session.travelMinutes ?? 0) + LEAVE_BUFFER_MIN) * 60_000;
   }
 
-  async function castSession() {
-    const body = sessionBody();
-    if (!body) return;
-    try {
-      await fetch(SHARE_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      // The countdown is local and keeps working; only the dashboard misses out.
-    }
-  }
 
-  async function withdrawSession() {
-    try {
-      await fetch(`${SHARE_ENDPOINT}/${encodeURIComponent(deviceId())}`, { method: 'DELETE' });
-    } catch { /* it will age out on the server anyway */ }
-  }
+  const castSession = () => postSession(state.session);
+  const withdrawSession = () => deleteSession();
 
   function renderShare() {
     const el = $('focus-share');
@@ -1528,6 +1512,8 @@
     const usable = modesThatMake(train, station);
     if (!usable.length) return;
 
+    // Honour the board's method when it still makes the train.
+    const mode = usable.includes(state.mode) ? state.mode : usable[0];
     state.session = {
       stationId,
       dirCode,
@@ -1535,25 +1521,53 @@
       express: train.express,
       destination: train.destination,
       arrivalTime: train.arrivalTime,
-      // Honour the board's method when it still makes the train.
-      mode: usable.includes(state.mode) ? state.mode : usable[0],
+      mode,
+      travelMinutes: station.travel?.[mode] ?? 0,
+      bufferMinutes: LEAVE_BUFFER_MIN,
     };
+    saveSession(state.session);
+    openSession();
+    castSession();
+  }
+
+  // Show the focus screen for whatever session is running.
+  function openSession() {
+    if (!state.session) return;
     $('focus').hidden = false;
     renderSession();
     renderShare();
-    castSession();
-    showFocusRoute(station);
+    renderResume();
+    const station = state.byId.get(state.session.stationId);
+    if (station) showFocusRoute(station);
+  }
+
+  // Leaving the focus screen is not giving up on the train: the session keeps
+  // running and stays on the dashboard until it is ended or the train goes.
+  function closeSession() {
+    $('focus').hidden = true;
+    renderResume();
   }
 
   function endSession() {
     state.session = null;
+    saveSession(null);
     $('focus').hidden = true;
+    renderResume();
     withdrawSession();
+  }
+
+  function renderResume() {
+    const button = $('resume');
+    if (!button) return;
+    button.hidden = !state.session || !$('focus').hidden;
   }
 
   function setSessionMode(mode) {
     if (!state.session) return;
+    const station = state.byId.get(state.session.stationId);
     state.session.mode = mode;
+    state.session.travelMinutes = station?.travel?.[mode] ?? state.session.travelMinutes ?? 0;
+    saveSession(state.session);
     renderSession();
     castSession();   // the deadline moved, so the dashboard should follow
   }
@@ -1639,6 +1653,10 @@
     const match = dir?.trains.find(t =>
       t.route === session.route && Math.abs(t.arrivalTime - session.arrivalTime) <= 180);
     if (match) session.arrivalTime = match.arrivalTime;
+
+    const travel = state.byId.get(session.stationId)?.travel?.[session.mode];
+    if (Number.isFinite(travel)) session.travelMinutes = travel;
+    saveSession(session);
   }
 
   function renderSession() {
@@ -1647,21 +1665,26 @@
 
     const station = state.byId.get(session.stationId);
     const mode = session.mode;
-    const travel = station?.travel?.[mode] ?? 0;
-    const untilLeave = leaveDeadline(session, station, mode) - Date.now();
+    const travel = session.travelMinutes ?? 0;
+    const untilLeave = sessionDeadline(session) - Date.now();
     const untilTrain = session.arrivalTime * 1000 - Date.now();
 
     // One button per mode, each showing what that choice costs you. This runs
     // every second, so only touch the DOM when something actually changed.
+    // Before the board has loaded there is only the session's own method to show.
+    const offered = station?.travel ? MODES : [mode];
+    const minutesOf = m => (station?.travel ? station.travel[m] : travel);
+    const makes = m => (station?.travel
+      ? leaveDeadline(session, station, m) > Date.now()
+      : sessionDeadline(session) > Date.now());
+
     const buttons = $('focus-modes');
-    const key = MODES
-      .map(m => `${station?.travel?.[m]}:${leaveDeadline(session, station, m) > Date.now()}`)
-      .join('|') + `|${mode}`;
+    const key = offered.map(m => `${minutesOf(m)}:${makes(m)}`).join('|') + `|${mode}`;
     if (buttons.dataset.key !== key) {
       buttons.dataset.key = key;
-      buttons.innerHTML = MODES.map(m => {
-        const minutes = station?.travel?.[m] ?? 0;
-        const makesIt = leaveDeadline(session, station, m) > Date.now();
+      buttons.innerHTML = offered.map(m => {
+        const minutes = minutesOf(m);
+        const makesIt = makes(m);
         return `<button data-mode="${m}" aria-pressed="${m === mode}"${makesIt ? '' : ' disabled'}
                         title="${makesIt ? '' : 'Too late to make this train ' + MODE_PHRASE[m]}">` +
                `${MODE_LABEL[m]} <b>${minutes}</b></button>`;
@@ -1901,8 +1924,9 @@
   $('focus-exit').addEventListener('click', endSession);
   $('focus-home').addEventListener('click', event => {
     event.preventDefault();
-    endSession();
+    closeSession();
   });
+  $('resume').addEventListener('click', openSession);
   $('focus-modes').addEventListener('click', event => {
     const button = event.target.closest('button[data-mode]');
     if (button && !button.disabled) setSessionMode(button.dataset.mode);
@@ -1943,6 +1967,15 @@
     }
     renderModes();
     renderPlace();
+
+    // A session started before a reload or a trip to the dashboard is still
+    // running: pick it back up and keep the heartbeat alive.
+    state.session = loadSavedSession();
+    if (state.session) {
+      castSession();
+      renderResume();
+    }
+
     refresh();
     setInterval(refresh, REFRESH_MS);
     loadWeather();

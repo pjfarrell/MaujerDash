@@ -50,6 +50,55 @@ function loadPlace() {
   }
 }
 
+// --- Running focus session -----------------------------------
+// Stored per device so it survives a reload or a trip to the dashboard. The
+// heartbeat lives here too: whichever page is open keeps the session alive,
+// otherwise it would age out the moment you left the board.
+const SESSION_KEY = 'maujerdash:session';
+const HEARTBEAT_MS = 15_000;
+
+function loadSavedSession() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SESSION_KEY));
+    if (!saved || !Number.isFinite(saved.arrivalTime) || !saved.stationId) return null;
+    // Nothing to go back to once the train has gone.
+    return saved.arrivalTime * 1000 > Date.now() - 60_000 ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session) {
+  try {
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SESSION_KEY);
+  } catch { /* it still works for this page, just not the next one */ }
+}
+
+async function postSession(session) {
+  if (!session) return;
+  try {
+    await fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...session, deviceId: deviceId(), name: displayName() }),
+    });
+  } catch {
+    // The countdown is local and keeps working; only the dashboard misses out.
+  }
+}
+
+async function deleteSession() {
+  try {
+    await fetch(`/api/sessions/${encodeURIComponent(deviceId())}`, { method: 'DELETE' });
+  } catch { /* it will age out on the server anyway */ }
+}
+
+// Re-reads storage every beat, so ending a session in another tab stops it here.
+function startHeartbeat() {
+  return setInterval(() => postSession(loadSavedSession()), HEARTBEAT_MS);
+}
+
 // --- Device identity -----------------------------------------
 // A session is owned by a device, not an account: the id is generated in the
 // browser, kept in localStorage, and only ever leaves as an opaque string.

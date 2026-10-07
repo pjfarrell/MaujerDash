@@ -462,6 +462,10 @@
   sync();
   tick();
   setInterval(tick, 1000);
+  // Your own session would otherwise age out while you sat here watching it.
+  postSession(loadSavedSession());
+  startHeartbeat();
+
   const place = showPlace();
   showWeather(place);
   setInterval(() => showWeather(loadPlace() ?? DEFAULT_PLACE), 10 * 60_000);
