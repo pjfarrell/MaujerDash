@@ -3,11 +3,11 @@
 # down, stop the stack, drop the image, pull main and bring it back up.
 #
 # Safe to run on a timer, e.g. every five minutes from cron:
-#   */5 * * * * /home/kohei/MaujerDash/scripts/update.sh >> /home/kohei/maujerdash-update.log 2>&1
+#   */5 * * * * /MaujerDash/scripts/update.sh >> /MaujerDash/maujerdash-update.log 2>&1
 
 set -eu
 
-APP_DIR=/home/kohei/MaujerDash
+APP_DIR=/MaujerDash
 cd "$APP_DIR"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
