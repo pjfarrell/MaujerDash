@@ -312,6 +312,43 @@ app.get('/healthz', (_req, res) => {
 app.get('/api/nearby', nearby);
 app.get('/api/trains', nearby); // legacy path, same payload
 
+// Arrivals for a fixed set of stations, for pages that watch one place rather
+// than following the chosen location. No routing: these pages don't need it.
+const MAX_DEPARTURE_STATIONS = 6;
+
+app.get('/api/departures', async (req, res) => {
+  const ids = [...new Set(String(req.query.ids ?? '').split(',').map(id => id.trim()))];
+  const stations = ids
+    .map(id => STATIONS.find(s => s.id === id))
+    .filter(Boolean)
+    .slice(0, MAX_DEPARTURE_STATIONS);
+  if (!stations.length) return res.status(400).json({ error: 'No known station ids in ids' });
+
+  const { feeds, errors } = await loadFeeds([...new Set(stations.flatMap(s => s.feeds))]);
+  if (!feeds.length) {
+    return res.status(503).json({ error: 'MTA feeds unavailable', feedErrors: errors });
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = collectArrivals(feeds, stations.map(s => s.id), now);
+
+  res.json({
+    updatedAt: Date.now(),
+    feedErrors: errors,
+    stations: stations.map(station => ({
+      id: station.id,
+      name: station.name,
+      routes: station.routes,
+      lat: station.lat,
+      lon: station.lon,
+      directions: [
+        { code: 'N', label: station.north, trains: arrivals.get(station.id).N },
+        { code: 'S', label: station.south, trains: arrivals.get(station.id).S },
+      ],
+    })),
+  });
+});
+
 // --- Shared focus sessions ------------------------------------
 // The one piece of cross-visitor state in the app: who is currently racing for
 // a train. Held in memory only - sessions last minutes, and losing them on a
@@ -710,6 +747,7 @@ app.get('/api/debug/stops', async (req, res) => {
 app.use('/vendor/leaflet', express.static(path.join(__dirname, 'node_modules/leaflet/dist')));
 
 app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
+app.get('/lorimer', (_req, res) => res.sendFile(path.join(__dirname, 'lorimer.html')));
 
 app.use(express.static(__dirname, { index: 'home.html' }));
 

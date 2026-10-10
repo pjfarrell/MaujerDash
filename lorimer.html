@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lorimer St Departures</title>
+  <link rel="stylesheet" href="/shared.css">
+  <style>
+    :root {
+      --l: #7cc8f5;          /* light blue for the L */
+      --l-ink: #0b1a24;
+      --g: #6cbe45;          /* the G's own green */
+      --g-ink: #0d1a08;
+    }
+
+    /* The page is a wall display: it fills the screen exactly and never scrolls
+       on anything landscape. Sizes lean on vh so they grow with the screen. */
+    body { height: 100vh; overflow: hidden; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 18px;
+      flex-wrap: wrap;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .title { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+    .title h1 {
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .title .page-title { margin: 0; white-space: nowrap; }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+      color: var(--dim);
+    }
+    .now-time {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--white);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.4s;
+    }
+    .dot.ok  { background: var(--green); }
+    .dot.err { background: var(--red); }
+
+    main {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    /* --- One box per line ------------------------------------------------ */
+    .box {
+      --accent: var(--white);
+      position: relative;
+      min-height: 0;
+      border-radius: 22px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(150px, 17%) 1fr 1fr;
+    }
+
+    .ident {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.4vh;
+      padding: 16px;
+      text-align: center;
+    }
+    .bullet {
+      width: clamp(64px, 15vh, 140px);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(2.6rem, 10vh, 6rem);
+      font-weight: 900;
+      line-height: 1;
+    }
+    .station {
+      font-size: clamp(0.85rem, 2.2vh, 1.25rem);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    /* Next train on the left; the ones after it stack as cards on the right,
+       soonest at the top. */
+    .dir {
+      position: relative;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 2vw;
+      padding: 2vh 2.6vw 10vh;
+    }
+    .lead { flex: 1; min-width: 0; }
+
+    .towards {
+      font-size: clamp(1.3rem, 4.6vh, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      line-height: 1.05;
+      white-space: nowrap;
+    }
+    .terminal {
+      margin-top: 0.6vh;
+      font-size: clamp(0.75rem, 1.8vh, 1rem);
+      color: var(--dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .next {
+      margin-top: 1.6vh;
+      display: flex;
+      align-items: baseline;
+      gap: 0.5vw;
+      line-height: 0.9;
+      font-variant-numeric: tabular-nums;
+    }
+    .next .mins {
+      font-size: clamp(3.6rem, 15vh, 9.5rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+    .next .unit {
+      font-size: clamp(1rem, 3vh, 1.8rem);
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .next.now .mins {
+      color: var(--accent);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    .at {
+      margin-top: 0.8vh;
+      font-size: clamp(0.75rem, 1.8vh, 1rem);
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .then {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1vh;
+      width: clamp(150px, 15vw, 260px);
+    }
+    .card {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 1.3vh 18px;
+      border-radius: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .card .m {
+      font-size: clamp(1.5rem, 5.8vh, 3.4rem);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .card .m small {
+      margin-left: 3px;
+      font-size: 0.45em;
+      font-weight: 700;
+      letter-spacing: 0;
+      opacity: 0.75;
+    }
+    .card .t {
+      font-size: clamp(0.75rem, 2vh, 1.1rem);
+      opacity: 0.65;
+      white-space: nowrap;
+    }
+
+    .none {
+      margin-top: 1.6vh;
+      font-size: clamp(0.9rem, 2.4vh, 1.3rem);
+      font-style: italic;
+      color: var(--muted);
+    }
+
+    /* --- The track: the last ten minutes before the next train, drawn to
+       scale. The train waits at the start until it is ten minutes out, runs
+       a minute per tick to the stop, then the stop flashes and it starts over. */
+    .track {
+      --tw: clamp(40px, 4.4vw, 64px);   /* train length */
+      --th: clamp(14px, 2.2vh, 20px);   /* train height */
+      position: absolute;
+      left: 2.6vw;
+      right: 2.6vw;
+      bottom: 3.4vh;
+      height: calc(var(--th) + 8px);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .line-wrap { position: relative; flex: 1; height: 100%; }
+    .rail, .run {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      height: 5px;
+      margin-top: -2.5px;
+      border-radius: 3px;
+    }
+    /* A faint rail ahead of the train, a lit one behind it */
+    .rail {
+      right: 0;
+      background: rgba(var(--rgb), 0.16);
+    }
+    .run {
+      width: calc(var(--p) * (100% - var(--tw)) + var(--tw) / 2);
+      background: linear-gradient(90deg, rgba(var(--rgb), 0), var(--accent));
+      transition: width 1s linear;
+    }
+
+    /* One tick a minute, labelled every five, measured to the train's nose */
+    .tick {
+      position: absolute;
+      top: 50%;
+      left: calc((1 - var(--m) / 10) * (100% - var(--tw)) + var(--tw));
+      width: 2px;
+      height: 12px;
+      margin: -6px 0 0 -1px;
+      border-radius: 1px;
+      background: rgba(var(--rgb), 0.35);
+    }
+    .tick.major { height: 18px; margin-top: -9px; background: rgba(var(--rgb), 0.6); }
+    .tick span {
+      position: absolute;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: clamp(0.65rem, 1.5vh, 0.85rem);
+      font-weight: 700;
+      color: rgba(var(--rgb), 0.65);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .runner {
+      position: absolute;
+      top: 50%;
+      left: calc(var(--p) * (100% - var(--tw)));
+      width: var(--tw);
+      height: var(--th);
+      margin-top: calc(var(--th) / -2);
+      border-radius: 4px calc(var(--th) / 2) calc(var(--th) / 2) 4px;
+      background:
+        repeating-linear-gradient(90deg, transparent 0 18%, rgba(0, 0, 0, 0.28) 18% 30%) 12% 30% / 62% 34% no-repeat,
+        var(--accent);
+      box-shadow: 0 0 18px rgba(var(--rgb), 0.85), 0 0 4px #fff;
+      transition: left 1s linear;
+      z-index: 1;
+    }
+    /* Headlight */
+    .runner::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      margin-top: -3px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 8px 2px #fff;
+    }
+    .stop {
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      width: 24px;
+      height: 24px;
+      margin-top: -12px;
+      border-radius: 50%;
+      border: 3px solid var(--accent);
+      background: var(--field);
+      z-index: 2;
+    }
+    .track.due .stop { animation: due 1s ease-in-out infinite; }
+    .stop::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 50%;
+      border: 3px solid var(--accent);
+      opacity: 0;
+    }
+    .track.passed .stop::after { animation: burst 1.2s ease-out; }
+    .track.passed .runner, .track.passed .run { transition: none; }
+
+    .clock {
+      flex: 0 0 auto;
+      min-width: 3.2em;
+      margin-left: 8px;
+      text-align: right;
+      font-size: clamp(1.1rem, 3.4vh, 1.9rem);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+    }
+
+    @keyframes due { 50% { background: var(--accent); box-shadow: 0 0 14px rgba(var(--rgb), 0.9); } }
+    @keyframes burst {
+      0%   { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(4); }
+    }
+
+    @keyframes pulse { 50% { opacity: 0.45; } }
+    @media (prefers-reduced-motion: reduce) {
+      .next.now .mins, .track.due .stop, .track.passed .stop::after { animation: none; }
+    }
+
+    /* --- Both lines share one look: an open dark field with a glow in the
+       line's colour, a glowing bullet, coloured headings and filled chips. --- */
+    .box.l { --accent: var(--l); --rgb: 124, 200, 245; --ink: var(--l-ink); --field: #11161a; --chip: #c6e6fb; }
+    .box.g { --accent: var(--g); --rgb: 108, 190, 69;  --ink: var(--g-ink); --field: #121611; --chip: #bfe6ab; }
+
+    .box.l, .box.g {
+      background:
+        radial-gradient(ellipse 70% 120% at 0% 100%, rgba(var(--rgb), 0.2), rgba(var(--rgb), 0) 70%),
+        var(--field);
+      border: 1px solid rgba(var(--rgb), 0.22);
+    }
+    .box .ident { color: var(--accent); }
+    .box .bullet {
+      background: var(--accent);
+      color: var(--ink);
+      box-shadow: 0 0 0 6px rgba(var(--rgb), 0.15), 0 0 40px rgba(var(--rgb), 0.35);
+    }
+    .box .towards { color: var(--accent); }
+    .box .dir + .dir {
+      background: linear-gradient(180deg, rgba(var(--rgb), 0), rgba(var(--rgb), 0.05));
+      border-left: 1px dashed rgba(var(--rgb), 0.25);
+    }
+    .box .card {
+      background: rgba(var(--rgb), 0.14);
+      border: 1px solid rgba(var(--rgb), 0.22);
+      color: var(--chip);
+    }
+
+    /* Portrait screens and phones: stack everything and let the page scroll. */
+    @media (max-width: 760px), (orientation: portrait) and (max-width: 1000px) {
+      body { height: auto; overflow: auto; }
+      main { grid-template-rows: auto auto; }
+      .box { grid-template-columns: 1fr 1fr; }
+      .ident {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 14px;
+        padding: 12px 18px;
+      }
+      .bullet { width: 52px; font-size: 2rem; }
+      .dir { padding: 18px 18px 74px; }
+      .track { left: 18px; right: 18px; bottom: 30px; --tw: 38px; --th: 14px; gap: 10px; }
+      .tick span { font-size: 0.65rem; }
+      .towards { font-size: 1.35rem; }
+      .next .mins { font-size: 3.6rem; }
+      .next .unit { font-size: 1rem; }
+      .then { width: 104px; }
+      .card { flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 12px; }
+      .card .m { font-size: 1.6rem; }
+    }
+    @media (max-width: 460px) {
+      .box { grid-template-columns: 1fr; }
+      .box .dir + .dir { border-left: none; border-top: 1px dashed rgba(var(--rgb), 0.25); }
+      .title .page-title { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="title">
+    <h1><a class="brand" href="/">Nearby Trains</a></h1>
+    <div class="page-title">Metropolitan Av / Lorimer St</div>
+  </div>
+  <div class="meta">
+    <span class="dot" id="dot" title="Loading…"></span>
+    <span class="now-time js-time"></span>
+    <span id="weather" class="weather" hidden></span>
+    <a class="dash-link" href="/lorimer" aria-current="page">Lorimer</a>
+    <a class="dash-link" href="/dashboard">Dashboard &rarr;</a>
+  </div>
+</header>
+
+<main id="lines"></main>
+
+<script type="module">
+  import { esc } from '/shared.js';
+
+  // The two halves of the Lorimer St / Metropolitan Av complex, L on top.
+  // Direction names are written out here because the station index's generic
+  // ones ("Southbound", "Outbound") read poorly on a board for one place.
+  const LINES = [
+    { id: 'L10', route: 'L', cls: 'l', name: 'Lorimer St',
+      directions: { N: 'To Manhattan', S: 'To Brooklyn' } },
+    { id: 'G29', route: 'G', cls: 'g', name: 'Metropolitan Av',
+      directions: { N: 'To Queens', S: 'To Brooklyn' } },
+  ];
+  const WEATHER_AT = { lat: 40.7134, lon: -73.9508 };
+  const REFRESH_MS = 30_000;
+  const FOLLOWING = 3;   // smaller times after the big one
+
+  const TRACK_SECONDS = 10 * 60;   // the track is the last ten minutes
+
+  const $ = id => document.getElementById(id);
+  let stations = [];
+  let lastOk = 0;
+
+  // Per direction: the train we're counting down to, remembered across feed
+  // refreshes so the track can tell when it has passed (the next arrival jumps
+  // forward) and flash the stop as it starts over.
+  const legs = new Map();
+
+  // Minutes are recomputed from the absolute arrival time, so the board keeps
+  // counting down between feed refreshes.
+  const minutesUntil = train => Math.max(0, Math.round((train.arrivalTime * 1000 - Date.now()) / 60_000));
+  const upcoming = trains => trains.filter(t => t.arrivalTime * 1000 > Date.now() - 30_000);
+  const clockTime = seconds => new Date(seconds * 1000)
+    .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  // How far along the track the train is: 0 when the previous train left,
+  // 1 when the next one is due.
+  function legFor(key, trains) {
+    const [first] = trains;
+    let leg = legs.get(key);
+    if (!leg || first.arrivalTime > leg.nextAt + 45) {
+      const passed = Boolean(leg) && leg.nextAt <= Date.now() / 1000 + 45;
+      leg = { nextAt: first.arrivalTime, passedAt: passed ? Date.now() : 0 };
+      legs.set(key, leg);
+    } else {
+      leg.nextAt = first.arrivalTime;   // follow delays without restarting
+    }
+    return leg;
+  }
+
+  // 0 at ten or more minutes out, 1 when the train is due.
+  function trackState(leg) {
+    const left = Math.max(0, Math.round(leg.nextAt - Date.now() / 1000));
+    return {
+      p: Math.min(1, Math.max(0, 1 - left / TRACK_SECONDS)),
+      due: left <= 30,
+      passed: Date.now() - leg.passedAt < 1500,
+      clock: left <= 0 ? 'Due' : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`,
+    };
+  }
+
+  const TICKS = Array.from({ length: 10 }, (_, i) => 10 - i)   // 10..1; the stop is 0
+    .map(m => `<i class="tick${m % 5 ? '' : ' major'}" style="--m:${m}">${m % 5 ? '' : `<span>${m}</span>`}</i>`)
+    .join('');
+
+  function trackHtml(key, leg) {
+    const t = trackState(leg);
+    const cls = `track${t.due ? ' due' : ''}${t.passed ? ' passed' : ''}`;
+    return `<div class="${cls}" data-key="${key}" style="--p:${t.p.toFixed(4)}">
+              <div class="line-wrap">
+                <div class="rail"></div><div class="run"></div>${TICKS}
+                <div class="runner"></div><div class="stop"></div>
+              </div>
+              <span class="clock">${t.clock}</span>
+            </div>`;
+  }
+
+  // Once a second: slide each train along and update its clock.
+  function moveTracks() {
+    for (const el of document.querySelectorAll('.track')) {
+      const leg = legs.get(el.dataset.key);
+      if (!leg) continue;
+      const t = trackState(leg);
+      el.style.setProperty('--p', t.p.toFixed(4));
+      el.classList.toggle('due', t.due);
+      el.classList.toggle('passed', t.passed);
+      el.querySelector('.clock').textContent = t.clock;
+    }
+  }
+
+  function renderDirection(line, direction) {
+    const towards = esc(line.directions[direction.code] ?? direction.label);
+    const trains = upcoming(direction.trains);
+    if (!trains.length) {
+      return `<div class="dir"><div class="lead"><div class="towards">${towards}</div>
+                <div class="none">No trains scheduled</div></div></div>`;
+    }
+
+    const [first, ...rest] = trains;
+    const key = `${line.id}-${direction.code}`;
+    const leg = legFor(key, trains);
+    const mins = minutesUntil(first);
+    const next = mins <= 0
+      ? `<div class="next now"><span class="mins">Now</span></div>`
+      : `<div class="next"><span class="mins">${mins}</span><span class="unit">min</span></div>`;
+    const then = rest.slice(0, FOLLOWING)
+      .map(train => `<div class="card">
+                       <span class="m">${minutesUntil(train)}<small>min</small></span>
+                       <span class="t">${clockTime(train.arrivalTime)}</span>
+                     </div>`)
+      .join('');
+
+    return `<div class="dir">
+              <div class="lead">
+                <div class="towards">${towards}</div>
+                <div class="terminal">${esc(first.destination ?? '')}</div>
+                ${next}
+                <div class="at">Arrives ${clockTime(first.arrivalTime)}</div>
+              </div>
+              ${then ? `<div class="then">${then}</div>` : ''}
+              ${trackHtml(key, leg)}
+            </div>`;
+  }
+
+  function render() {
+    $('lines').innerHTML = LINES.map(line => {
+      const station = stations.find(s => s.id === line.id);
+      const body = station
+        ? station.directions.map(d => renderDirection(line, d)).join('')
+        : `<div class="dir"><div class="none">Waiting for the feed&hellip;</div></div>`;
+      return `<section class="box ${line.cls}">
+                <div class="ident">
+                  <div class="bullet">${esc(line.route)}</div>
+                  <div class="station">${esc(line.name)}</div>
+                </div>
+                ${body}
+              </section>`;
+    }).join('');
+  }
+
+  function setStatus(ok, message) {
+    $('dot').className = ok ? 'dot ok' : 'dot err';
+    $('dot').title = message;
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch(`/api/departures?ids=${LINES.map(l => l.id).join(',')}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      stations = body.stations;
+      lastOk = Date.now();
+      const stale = body.feedErrors?.length;
+      setStatus(!stale, `${stale ? 'Some feeds are delayed' : 'Live'} · updated ${new Date().toLocaleTimeString()}`);
+    } catch (err) {
+      // Keep counting down the last good data; the dot turns red to say so.
+      setStatus(false, `Can't reach the MTA (${err.message})` +
+        (lastOk ? ` · last update ${new Date(lastOk).toLocaleTimeString()}` : ''));
+    }
+    render();
+  }
+
+  async function showWeather() {
+    try {
+      const res = await fetch(`/api/weather?lat=${WEATHER_AT.lat}&lon=${WEATHER_AT.lon}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const weather = await res.json();
+      const el = $('weather');
+      el.textContent = `${weather.icon} ${weather.temperature}°`;
+      el.title = `${weather.description} · feels like ${weather.feelsLike}° · wind ${weather.windMph} mph`;
+      el.hidden = false;
+    } catch {
+      $('weather').hidden = true;
+    }
+  }
+
+  let lastSlot = -1;
+  function tick() {
+    const time = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    for (const el of document.querySelectorAll('.js-time')) el.textContent = time;
+    // Redraw only when a countdown could have changed.
+    const slot = Math.floor(Date.now() / 30_000);
+    if (slot !== lastSlot) { lastSlot = slot; render(); }
+    else moveTracks();
+  }
+
+  render();
+  tick();
+  setInterval(tick, 1000);
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+  showWeather();
+  setInterval(showWeather, 10 * 60_000);
+</script>
+</body>
+</html>
