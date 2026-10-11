@@ -190,9 +190,14 @@ function collectArrivals(feeds, stationIds, now) {
       if (!tu?.stopTimeUpdate?.length) continue;
 
       const { route, express } = displayRoute(tu.trip.routeId);
+      const lastStop = tu.stopTimeUpdate[tu.stopTimeUpdate.length - 1];
       let destination;
       for (const stu of tu.stopTimeUpdate) {
         if (!stu.stopId) continue;
+        // A train ending its run here isn't one you can board. This matters
+        // most when part of a line is suspended: trips turn back short, and
+        // without it they'd show as departures towards the closed section.
+        if (stu === lastStop) continue;
         const direction = stu.stopId.slice(-1);
         if (direction !== 'N' && direction !== 'S') continue;
 
@@ -312,6 +317,57 @@ app.get('/healthz', (_req, res) => {
 app.get('/api/nearby', nearby);
 app.get('/api/trains', nearby); // legacy path, same payload
 
+// --- Service alerts ------------------------------------------
+// The MTA's own alerts (suspensions, reroutes, skipped stops), as JSON. Only
+// the ones in effect right now are kept. A failure here never blocks arrivals.
+const ALERTS_URL = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts.json';
+const ALERTS_TTL = 60_000;
+let alertsCache = null;   // { at, alerts, inflight }
+
+const englishText = translated =>
+  translated?.translation?.find(t => t.language === 'en')?.text ??
+  translated?.translation?.[0]?.text ?? null;
+
+async function getAlerts() {
+  if (alertsCache?.alerts && Date.now() - alertsCache.at < ALERTS_TTL) return alertsCache.alerts;
+  if (alertsCache?.inflight) return alertsCache.inflight;
+
+  const inflight = (async () => {
+    const res = await fetch(ALERTS_URL, { signal: AbortSignal.timeout(OSRM_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`MTA alerts ${res.status}: ${res.statusText}`);
+    const body = await res.json();
+    const alerts = (body.entity ?? []).map(entity => {
+      const alert = entity.alert ?? {};
+      const informed = alert.informed_entity ?? [];
+      return {
+        id: entity.id,
+        type: alert['transit_realtime.mercury_alert']?.alert_type ?? null,
+        header: englishText(alert.header_text),
+        routes: [...new Set(informed.map(i => i.route_id).filter(Boolean))],
+        // Parent station ids, so "L10N" and "L10" both match Lorimer St.
+        stops: [...new Set(informed.map(i => i.stop_id).filter(Boolean)
+          .map(id => (/[NS]$/.test(id) ? parentOf(id) : id)))],
+        periods: (alert.active_period ?? []).map(p => ({ start: p.start ?? 0, end: p.end ?? 0 })),
+      };
+    }).filter(alert => alert.header && alert.routes.length);
+    alertsCache = { at: Date.now(), alerts };
+    return alerts;
+  })();
+
+  inflight.catch(() => {
+    // Keep serving the last good copy rather than dropping every alert.
+    alertsCache = alertsCache?.alerts ? { at: alertsCache.at, alerts: alertsCache.alerts } : null;
+  });
+  alertsCache = { ...alertsCache, inflight };
+  return inflight;
+}
+
+function activeAlertsFor(alerts, routes, now) {
+  return alerts.filter(alert =>
+    alert.routes.some(r => routes.includes(r)) &&
+    alert.periods.some(p => (!p.start || p.start <= now) && (!p.end || p.end > now)));
+}
+
 // Arrivals for a fixed set of stations, for pages that watch one place rather
 // than following the chosen location. No routing: these pages don't need it.
 const MAX_DEPARTURE_STATIONS = 6;
@@ -332,9 +388,18 @@ app.get('/api/departures', async (req, res) => {
   const now = Math.floor(Date.now() / 1000);
   const arrivals = collectArrivals(feeds, stations.map(s => s.id), now);
 
+  let alerts = [];
+  let alertsError = null;
+  try {
+    alerts = await getAlerts();
+  } catch (err) {
+    alertsError = err.message;
+  }
+
   res.json({
     updatedAt: Date.now(),
     feedErrors: errors,
+    alertsError,
     stations: stations.map(station => ({
       id: station.id,
       name: station.name,
@@ -345,6 +410,10 @@ app.get('/api/departures', async (req, res) => {
         { code: 'N', label: station.north, trains: arrivals.get(station.id).N },
         { code: 'S', label: station.south, trains: arrivals.get(station.id).S },
       ],
+      // Alerts in effect now for this station's lines, ones naming this station first.
+      alerts: activeAlertsFor(alerts, station.routes, now)
+        .map(({ id, type, header, stops }) => ({ id, type, header, here: stops.includes(station.id) }))
+        .sort((a, b) => Number(b.here) - Number(a.here)),
     })),
   });
 });
