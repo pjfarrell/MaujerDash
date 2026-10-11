@@ -81,9 +81,14 @@
       overflow: hidden;
       display: grid;
       grid-template-columns: minmax(150px, 17%) 1fr 1fr;
+      /* An alerts strip across the top, empty and zero-height when all's well */
+      grid-template-rows: auto 1fr;
     }
+    .dir { grid-row: 2; }
+    .dir.wide { grid-column: 2 / -1; }
 
     .ident {
+      grid-row: 1 / -1;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -337,6 +342,70 @@
     }
 
     @keyframes pulse { 50% { opacity: 0.45; } }
+    /* --- MTA service alerts for the line ------------------------------- */
+    .alerts {
+      grid-row: 1;
+      grid-column: 2 / -1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8vh;
+      padding: 0 2.6vw;
+      min-width: 0;
+    }
+    .alerts:not(:empty) { padding-top: 1.8vh; }
+    .alert {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      padding: 0.9vh 14px;
+      border-radius: 10px;
+      background: rgba(245, 166, 35, 0.1);
+      border: 1px solid rgba(245, 166, 35, 0.35);
+      font-size: clamp(0.8rem, 2vh, 1.1rem);
+      line-height: 1.3;
+    }
+    .alert .kind {
+      flex: 0 0 auto;
+      font-size: 0.68em;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--yellow);
+    }
+    .alert .text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* "[L]" in the MTA's text, drawn as a small bullet */
+    .alert .route {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.35em;
+      height: 1.35em;
+      border-radius: 50%;
+      margin: 0 1px;
+      vertical-align: -0.2em;
+      font-size: 0.85em;
+      font-weight: 900;
+      background: var(--muted);
+      color: #fff;
+    }
+    .alert .route.l { background: var(--l); color: var(--l-ink); }
+    .alert .route.g { background: var(--g); color: var(--g-ink); }
+
+    /* The strip takes room from the trains, so tighten them to keep the box
+       on screen. */
+    .box.has-alerts .dir { padding-top: 1.2vh; }
+    .box.has-alerts .next { margin-top: 0.8vh; }
+    .box.has-alerts .next .mins { font-size: clamp(3rem, 12vh, 8rem); }
+    .box.has-alerts .then { gap: 0.7vh; }
+    .box.has-alerts .card { padding-top: 0.8vh; padding-bottom: 0.8vh; }
+    .box.has-alerts .card .m { font-size: clamp(1.4rem, 5vh, 3rem); }
+
     @media (prefers-reduced-motion: reduce) {
       .next.now .mins, .track.due .stop, .track.passed .stop::after { animation: none; }
     }
@@ -374,7 +443,13 @@
       body { height: auto; overflow: auto; }
       main { grid-template-rows: auto auto; }
       .box { grid-template-columns: 1fr 1fr; }
+      .alerts { grid-row: 2; grid-column: 1 / -1; padding: 0 18px; }
+      .alerts:not(:empty) { padding-top: 12px; }
+      .alert .text { white-space: normal; }
+      .dir { grid-row: 3; }
+      .dir.wide { grid-column: 1 / -1; }
       .ident {
+        grid-row: 1;
         grid-column: 1 / -1;
         flex-direction: row;
         justify-content: flex-start;
@@ -394,6 +469,7 @@
     }
     @media (max-width: 460px) {
       .box { grid-template-columns: 1fr; }
+      .dir { grid-row: auto; }
       .box .dir + .dir { border-left: none; border-top: 1px dashed rgba(var(--rgb), 0.25); }
       .title .page-title { display: none; }
     }
@@ -506,12 +582,33 @@
     }
   }
 
-  function renderDirection(line, direction) {
+  const ALERT_KINDS = { 'Planned - Part Suspended': 'Suspended', 'Part Suspended': 'Suspended',
+    'Suspended': 'Suspended', 'Planned - Stops Skipped': 'Stops skipped', 'Stops Skipped': 'Stops skipped',
+    'Delays': 'Delays', 'Reduced Service': 'Reduced service', 'Planned - Reroute': 'Rerouted',
+    'Reroute': 'Rerouted', 'Boarding Change': 'Boarding' };
+  const MAX_ALERTS = 2;
+
+  // The MTA writes lines as "[L]"; draw those as bullets.
+  const alertText = text => esc(text.replace(/\s+/g, ' ').trim())
+    .replace(/\[([A-Z0-9]{1,3})\]/g, (_, r) => `<span class="route ${r.toLowerCase()}">${r}</span>`);
+
+  function renderAlerts(station) {
+    return (station?.alerts ?? []).slice(0, MAX_ALERTS).map(alert => `
+      <div class="alert" title="${esc(alert.header)}">
+        <span class="kind">${esc(ALERT_KINDS[alert.type] ?? 'Alert')}</span>
+        <span class="text">${alertText(alert.header)}</span>
+      </div>`).join('');
+  }
+
+  function renderDirection(line, direction, station) {
     const towards = esc(line.directions[direction.code] ?? direction.label);
     const trains = upcoming(direction.trains);
     if (!trains.length) {
+      const why = station.alerts?.some(a => a.here)
+        ? 'No trains from here right now · see the alert above'
+        : 'No trains scheduled';
       return `<div class="dir"><div class="lead"><div class="towards">${towards}</div>
-                <div class="none">No trains scheduled</div></div></div>`;
+                <div class="none">${why}</div></div></div>`;
     }
 
     const [first, ...rest] = trains;
@@ -544,13 +641,15 @@
     $('lines').innerHTML = LINES.map(line => {
       const station = stations.find(s => s.id === line.id);
       const body = station
-        ? station.directions.map(d => renderDirection(line, d)).join('')
-        : `<div class="dir"><div class="none">Waiting for the feed&hellip;</div></div>`;
-      return `<section class="box ${line.cls}">
+        ? station.directions.map(d => renderDirection(line, d, station)).join('')
+        : `<div class="dir wide"><div class="none">Waiting for the feed&hellip;</div></div>`;
+      const flagged = station?.alerts?.length ? ' has-alerts' : '';
+      return `<section class="box ${line.cls}${flagged}">
                 <div class="ident">
                   <div class="bullet">${esc(line.route)}</div>
                   <div class="station">${esc(line.name)}</div>
                 </div>
+                <div class="alerts">${renderAlerts(station)}</div>
                 ${body}
               </section>`;
     }).join('');
